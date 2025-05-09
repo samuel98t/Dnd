@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1.0">
+    <title>D&D Room</title>
+    <link rel="stylesheet" href ="style.css">
+</head>
+<body>
+    <h1>Welcome to the D&D Room!</h1>
+
+    <div id="app-container">
+        <!-- Character Sheet Area-->
+         <div id="character-sheet-area">
+            <h2>Character Sheet</h2>
+            <p> Player Name: <input type="text" id="playerName" placeholder="Your Name"></p>
+            <p>HP: <input type ="number" id="charHP" value="10"></p>
+            <!-- Just testing for now, will obv add more stuff later-->
+         </div>
+
+         <div id="dice-roll-area">
+            <h2>Dice Roller</h2>
+            <button id="rollD20">Roll d20</button>
+            <p>Result: <span id="rollResult">---</span></p>
+         </div>
+
+         <div id="chat-area">
+            <h2>Chat</h2>
+            <div id="chat-messages">
+                <!-- Hopefully messages should appear here-->
+            </div>
+            <input type="text" id="chatInput" placeholder="Enter message...">
+            <button id="sendChat">Send</button>
+         </div>
+    </div>
+
+    <!-- Socket IO -->
+    <script src="/socket.io/socket.io.js"></script>
+    <!-- My Scripts-->
+    <script src="script.js"></script>
+
+</body>
+</html>
