@@ -1,86 +1,204 @@
-body {
+
+html, body {
+    height: 100%;
+    margin: 0;
+    padding: 0;
     font-family: sans-serif;
-    margin: 20px;
     background-color: #f4f4f4;
+    box-sizing: border-box;
 }
+
+*, *:before, *:after { 
+    box-sizing: inherit;
+}
+
+body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 20px;
+}
+
+h1 { 
+    color: #333;
+    text-align: center;
+    width: 100%;
+    margin-bottom: 20px;
+}
+
+h2 {
+    color: #333;
+    margin-top: 0; 
+    padding-bottom: 5px;
+    border-bottom: 1px solid #eee;
+}
+
+
+#auth-area {
+    background-color: #fff;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    margin-bottom: 20px;
+    width: 100%;
+    max-width: 400px;
+}
+#auth-area h3 {
+    margin-top: 0;
+}
+
 
 #app-container {
     display: flex;
-    flex-wrap: wrap;
-    gap: 20px;
-}
-
-#character-sheet-area, #dice-roll-area, #chat-area {
+    flex-direction: row; 
+    width: 100%;
+    max-width: 1600px;  
+    gap: 20px;           
     background-color: #fff;
     padding: 15px;
     border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    min-width: 250px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    align-items: stretch; 
 }
 
-h1, h2,h3 {
-    color: #333;
+
+#left-column {
+    flex-basis: 320px;  
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+#character-sheet-area, #dice-roll-area {
+    padding: 15px;
+    border: 1px solid #e0e0e0;
+    border-radius: 5px;
+    background-color: #fdfdfd;
+}
+
+
+#middle-column-chat {
+    flex-grow: 1;       
+    display: flex;
+    flex-direction: column;
+    padding: 15px;
+    border: 1px solid #e0e0e0;
+    border-radius: 5px;
+    background-color: #fdfdfd;
 }
 
 #chat-messages {
-    height: 150px;
-    border: 1px solid #ccc;
+    flex-grow: 1; 
     overflow-y: auto;
-    padding: 5px;
+    border: 1px solid #ccc;
+    padding: 10px;
     margin-bottom: 10px;
     background-color: #e9e9e9;
+    min-height: 300px; 
 }
 
-input[type="text"], input[type="number"] {
+.chat-input-container { 
+    display: flex;
+    gap: 10px;
+    margin-top: auto; 
+    flex-shrink: 0;
+}
+
+.chat-input-container input[type="text"] {
+    flex-grow: 1;
+    margin-bottom: 0; 
+}
+
+
+#sidebar-area {
+    flex-basis: 250px;
+    flex-shrink: 0;
+    padding: 15px;
+    border: 1px solid #e0e0e0;
+    border-radius: 5px;
+    background-color: #f9f9f9;
+}
+
+#user-list {
+    list-style-type: none;
+    padding-left: 0;
+    margin-top: 10px;
+}
+
+#user-list li {
+    padding: 6px 3px;
+    border-bottom: 1px dotted #ddd;
+    font-size: 0.95em;
+    color: #444;
+}
+
+#user-list li:last-child {
+    border-bottom: none;
+}
+
+#user-list li strong { 
+    color: #007bff;
+}
+
+
+input[type="text"], input[type="number"], input[type="password"] {
     padding: 8px;
     margin-bottom: 10px;
     border: 1px solid #ccc;
     border-radius: 4px;
+    width: 100%; 
+}
+#auth-area input[type="text"], #auth-area input[type="password"] {
+    width: calc(100% - 18px); 
 }
 
+
 button {
-    padding: 8px 15px;
+    padding: 10px 15px;
     background-color: #007bff;
     color: white;
     border: none;
     border-radius: 4px;
     cursor: pointer;
+    font-size: 0.95em;
 }
 
 button:hover {
     background-color: #0056b3;
 }
 
+
 .modal {
-    display: none; 
-    position: fixed; 
-    z-index: 1000; 
+    display: none;
+    position: fixed;
+    z-index: 1000;
     left: 0;
     top: 0;
-    width: 100%; 
-    height: 100%; 
-    overflow: auto; 
-    background-color: rgba(0,0,0,0.5); 
-    padding-top: 60px; 
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    background-color: rgba(0,0,0,0.5);
+    padding-top: 60px;
 }
 
 .modal-content {
     background-color: #fefefe;
-    margin: 5% auto; 
+    margin: 5% auto;
     padding: 20px;
     border: 1px solid #888;
-    width: 80%; 
-    max-width: 700px; 
+    width: 80%;
+    max-width: 700px;
     border-radius: 8px;
     position: relative;
-    max-height: 80vh; 
-    overflow-y: auto; 
+    max-height: 80vh;
+    overflow-y: auto;
 }
 
 .close-button {
     color: #aaa;
-    float: right; 
-    position: absolute; 
+
+    position: absolute;
     top: 10px;
     right: 20px;
     font-size: 28px;
@@ -100,16 +218,15 @@ button:hover {
 }
 #modalSheetContent p strong {
     display: inline-block;
-    min-width: 150px; 
+    min-width: 150px;
 }
 
-/* Simple grid for two-column layout in modal if needed */
 .sheet-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); /* Responsive columns */
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
     gap: 15px;
 }
 
-.sheet-grid div p { 
+.sheet-grid div p {
     margin-bottom: 5px;
 }

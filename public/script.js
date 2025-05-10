@@ -26,6 +26,8 @@ const openSheetButton = document.getElementById('openSheetButton');
 const closeSheetModalButton = document.getElementById('closeSheetModal');
 const modalSheetContent = document.getElementById('modalSheetContent');
 const saveSheetButton = document.getElementById('saveSheetButton');
+// Get sidebar
+const userListUL = document.getElementById('user-list');
 // Connection Test
 console.log("Socket.IO script loaded, trying to connect...");
 // Listen for connect
@@ -128,18 +130,7 @@ socket.on('roll result',(data)=>{
     addMessageToChat(message);// Display in chat
     rollResultDisplay.textContent = `Last roll: ${data.rollerName} got ${data.result}`; // Update general display
 });
-socket.on('auth success', (authData) => { 
-    console.log('Auth Success:', authData);
-    currentAuthenticatedUsername = authData.username;
-    currentCharacterSheet = authData.sheet; // Store the sheet
-    // Update UI and disable editing
-    if (playerNameInput) {
-        playerNameInput.value = currentAuthenticatedUsername;
-        playerNameInput.disabled = true; 
-    }
-    
-    addMessageToChat(`Logged in as ${currentAuthenticatedUsername}. Welcome!`);
-});
+
 // Placeholder for Character Sheet
 // Add listeners to emit changes to server later
 
@@ -180,7 +171,7 @@ socket.on('auth success', (authData) => {
 
     // Update UI
     if (authArea) authArea.style.display = 'none';
-    if (appContainer) appContainer.style.display = 'block'; 
+    if (appContainer) appContainer.style.display = ''; 
 
     if (playerNameInput) {
         playerNameInput.value = currentAuthenticatedUsername;
@@ -386,4 +377,31 @@ socket.on('character sheet updated', (data) => {
     } else {
         console.log(`Sheet updated for ${data.playerName} (another user).`);
     }
+});
+
+// sidebar helper func
+function updateUserList(users) {
+    if (!userListUL) return; 
+
+    userListUL.innerHTML = ''; // Clear the current list )
+
+    if (users && users.length > 0) {
+        users.forEach(username => {
+            const li = document.createElement('li');
+            li.textContent = username;
+            if (username === currentAuthenticatedUsername) {
+                li.innerHTML += ' <strong>(You)</strong>'; // Highlight the current user
+            }
+            userListUL.appendChild(li);
+        });
+    } else {
+        const li = document.createElement('li');
+        li.textContent = 'No active users.';
+        userListUL.appendChild(li);
+    }
+}
+// listen for user list updates from server
+socket.on('update user list', (userArray) => { // userArray is expected to be an array of usernames
+    console.log('Received "update user list":', userArray);
+    updateUserList(userArray);
 });

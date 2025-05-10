@@ -4,63 +4,77 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width,initial-scale=1.0">
     <title>D&D Room</title>
-    <link rel="stylesheet" href ="style.css">
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <h1>Welcome to the D&D Room!</h1>
-    <!-- Auth area, ill show this first and hide the rest-->
+
     <div id="auth-area">
-        <h2>Login / Register</h2>
-        <div id="login-form" style="margin-bottom: 20px">
+        <!-- LOGIN FORM -->
+        <div id="login-form">
             <h3>Login</h3>
-            <p>Username: <input type="text" id="loginUsername" placeholder="Username"></p>
-            <p>Password: <input type="password" id="loginPassword" placeholder="Password"></p>
+            <input type="text" id="loginUsername" placeholder="Username" autocomplete="username">
+            <input type="password" id="loginPassword" placeholder="Password" autocomplete="current-password">
             <button id="loginButton">Login</button>
         </div>
-        <hr>
-        <div id="register-form" style="margin-top:20px;">
+
+        <hr style="margin: 20px 0;">
+
+        <!-- REGISTRATION FORM -->
+        <div id="register-form">
             <h3>Register</h3>
-            <p>Username: <input type="text" id="registerUsername" placeholder="Username"></p>
-            <p>Password: <input type="password" id="registerPassword" placeholder="Password"></p>
+            <input type="text" id="registerUsername" placeholder="New Username" autocomplete="username">
+            <input type="password" id="registerPassword" placeholder="New Password" autocomplete="new-password">
             <button id="registerButton">Register</button>
         </div>
-        <p id="authError" style="color: red; margin-top: 15px;"></p>
+
+        <p id="authError" style="color: red; margin-top: 10px;"></p>
     </div>
-    <div id="app-container" style="display: none"> <!--- start with this hidden-->
-        <!-- Character Sheet Area-->
-         <div id="character-sheet-area">
-            <h2>Character Sheet</h2>
-            <p> Player Name: <input type="text" id="playerName" placeholder="Your Name" readonly></p>
-            <button id="openSheetButton">View Character Sheet</button>
-            <!-- Just testing for now, will obv add more stuff later-->
-         </div>
 
-         <div id="dice-roll-area">
-            <h2>Dice Roller</h2>
-            <button id="rollD20">Roll d20</button>
-            <p><span id="rollResult">---</span></p>
-         </div>
+    <div id="app-container" style="display: none;"> <!-- Flex or Grid Parent -->
+        <div id="left-column"> <!-- First Column -->
+            <div id="character-sheet-area">
+                <h2>Character Sheet</h2>
+                <p> Player Name: <input type="text" id="playerName" placeholder="Your Name" readonly></p>
+                <button id="openSheetButton">View Character Sheet</button>
+            </div>
 
-         <div id="chat-area">
+            <div id="dice-roll-area">
+                <h2>Dice Roller</h2>
+                <button id="rollD20">Roll d20</button>
+                <p><span id="rollResult">---</span></p>
+            </div>
+        </div> <!-- END OF left-column -->
+
+        <div id="middle-column-chat"> <!-- Second Column (Chat) -->
             <h2>Chat</h2>
             <div id="chat-messages">
                 <!-- Hopefully messages should appear here-->
             </div>
             <input type="text" id="chatInput" placeholder="Enter message...">
             <button id="sendChat">Send</button>
-         </div>
-    </div>
+        </div> <!-- END OF middle-column-chat -->
+
+        <div id="sidebar-area"> <!-- Third Column (Active Players) -->
+            <h2>Active Players</h2>
+            <ul id="user-list">
+                <li>Loading users...</li>
+            </ul>
+        </div> <!-- END OF sidebar-area -->
+    </div> <!-- END OF app-container -->
+
     <div id="sheetModal" class="modal">
         <div class="modal-content">
-            <span class="close-button" id="closeSheetModal">×</span>
+            <span class="close-button" id="closeSheetModal">×</span> 
             <h2>Character Sheet</h2>
             <div id="modalSheetContent">
-                <!-- Character sheet details will be populated here by JavaScript -->
+                <!-- Character sheet details should be here-->
                 <p>Loading sheet...</p>
             </div>
-            <button id="saveSheetButton" style="margin-top: 15px;">Save Changes</button> <!-- For future editing -->
+            <button id="saveSheetButton" style="margin-top: 15px;">Save Changes</button>
         </div>
     </div>
+
     <!-- Socket IO -->
     <script src="/socket.io/socket.io.js"></script>
     <!-- My Scripts-->

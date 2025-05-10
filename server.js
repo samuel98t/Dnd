@@ -104,6 +104,7 @@ function rollDice(diceString){
 // When a client connects
 io.on('connection',(socket)=>{
     console.log('A user connected (pre-auth):', socket.id);
+    socket.emit('update user list', Object.values(activeUsers));
     // Register
     socket.on('register',async(credentials)=>{
         const { username, password } = credentials;
@@ -133,6 +134,9 @@ io.on('connection',(socket)=>{
             const allSheets = await CharacterSheet.find().lean();
             io.emit('all character sheets',formatSheetsForClient(allSheets));
             console.log(`User ${normalizedUsername} registered and logged in.`);
+            // Broadcast updated user list to ALL clients
+            const usernamesArray = Object.values(activeUsers);
+            io.emit('update user list', usernamesArray);
         } catch (err) {
             console.error("Registration error:", err);
             socket.emit('auth error', { message: 'Registration failed. Please try again.' });
@@ -170,7 +174,7 @@ io.on('connection',(socket)=>{
                 io.emit('server message',{text:`${normalizedUsername} has logged in `,type:'system'});
                 const allSheets = await CharacterSheet.find().lean();
                 io.emit('all character sheets',formatSheetsForClient(allSheets));
-                io.emit('active user list',Object.values(activeUsers));
+                io.emit('update user list',Object.values(activeUsers));
                 console.log(`User ${normalizedUsername} logged in.`);
            } else {
                 socket.emit('auth error', { message: 'Invalid username or password.' });
@@ -243,7 +247,7 @@ io.on('connection',(socket)=>{
             console.log(`User ${username} (${socket.id}) disconnected.`)
             delete activeUsers[socket.id];
             io.emit('server message', { text: `${username} has disconnected.`, type: 'system' });
-            io.emit('active user list', Object.values(activeUsers));
+            io.emit('update user list', Object.values(activeUsers));
             io.emit('player disconnected', username);
         }else{
             console.log('A pre-auth user disconnected:', socket.id);
