@@ -12,14 +12,34 @@ const sendChatButton = document.getElementById('sendChat');
 
 // Connection Test
 console.log("Socket.IO script loaded, trying to connect...");
+// Listen for connect
 socket.on('connect',()=>{
     console.log(`Connected to server! Socket ID:`, socket.id);
-    addMessageToChat(`You connected! ID:${socket.id.substring(0,5)}`);
-});
 
+});
+// Listen for disconnect
 socket.on('disconnect',()=>{
     console.log('Disconnected from server!');
-    addMessageToChat('You disconnected from server.');
+});
+// Listen for roll error
+socket.on('roll error', (errorData) => {
+    console.error('Roll Error:', errorData.message);
+    addMessageToChat(`Error: ${errorData.message}`); // Display error in chat
+    // Show error on display
+    rollResultDisplay.textContent = `Error: ${errorData.message}`;
+});
+// Give chat history to new user
+socket.on('chat history',(history)=>{
+    chatMessagesDiv.innerHTML=''; // Clear current messages
+    history.forEach(msg=>{
+        if (msg.type === 'roll') {
+            addMessageToChat(msg.text); // msg.text already formatted for rolls
+        } else if (msg.type === 'chat' && msg.sender && msg.text) {
+            addMessageToChat(`${msg.sender}: ${msg.text}`);
+        } else if (msg.text) { // For simple system messages
+             addMessageToChat(msg.text);
+        }
+    });
 });
 
 // Basic chat implement.
@@ -32,28 +52,68 @@ function addMessageToChat(message){
 
 sendChatButton.addEventListener('click',()=>{
     const message = chatInput.value.trim();
+    const senderName = getPlayerName();
     if(message){
         // Send the message to server.
-        socket.emit('client message',message);
+        socket.emit('client message',{sender:senderName,text:message});
         chatInput.value = ''; // Clear input
     }
 });
 
-// Listen to messages from server
-socket.on('server message',(msg)=>{
-    addMessageToChat(msg);
+// Add enter to send chat
+chatInput.addEventListener('keydown',(event)=>{
+    if(event.key == "Enter"){
+        console.log("Enter key was pressed!");
+        const senderName = getPlayerName();
+        const message = chatInput.value.trim();
+        if(message){
+            socket.emit('client message',{sender:senderName,text:message});
+            chatInput.value='' // Clear input
+        }
+    }
 });
 
+// Listen to messages from server
+socket.on('server message',(msgData)=>{
+    // Check msgData type
+    if(typeof(msgData)==='string'){
+        addMessageToChat(msgData);
+    }
+    else if(msgData && msgData.sender && msgData.text){
+        addMessageToChat(`${msgData.sender}: ${msgData.text}`);
+    }
+    else if (msgData && msgData.text){
+        addMessageToChat(msgData.text);
+    }
+});
+
+// Func to get player name
+function getPlayerName(){
+    return playerNameInput.value.trim() || `Player ${socket.id.substring(0,5)}`;
+}
 
 // Dice Roll 
 RollD20Button.addEventListener('click',() =>{
-    const result = Math.floor(Math.random() * 20) + 1;
-    rollResultDisplay.textContent = result;
-    // Will have to emit to server and broadcast.
+    const rollerName = getPlayerName();
+    const rollType = "1d20" // ill make it more dynamic later
+    // Send to server
+    console.log(`Emitting 'dice roll' event :${rollerName} rolls ${rollType}`);
+    // Roll data
+    socket.emit('dice roll',{
+        rollerName: rollerName,
+        rollString: rollType,
+    });
 });
 
+// Listen to roll results from the server
+socket.on('roll result',(data)=>{
+    console.log(`Recieved 'roll result' event`,data);
+    const message = `${data.rollerName} rolled ${data.rollString}: ${data.result}`;
+    addMessageToChat(message);// Display in chat
+    rollResultDisplay.textContent = `Last roll: ${data.rollerName} got ${data.result}`; // Update general display
+});
 // Placeholder for Character Sheet
 // Add listeners to emit changes to server later
 
 // Inital message
-addMessageToChat('Welcome! Connecting to server...')
+addMessageToChat('Welcome! Connecting to server...');
