@@ -1,7 +1,18 @@
 // Connect to server , socket will be our individual connection
 const socket = io();
 
-// Get Elements
+let currentAuthenticatedUsername = null;
+let currentCharacterSheet = null; // To store the user's sheet
+// --- GET AUTH ELEMENTS ---
+const authArea = document.getElementById('auth-area');
+const loginUsernameInput = document.getElementById('loginUsername');
+const loginPasswordInput = document.getElementById('loginPassword');
+const loginButton = document.getElementById('loginButton');
+const registerUsernameInput = document.getElementById('registerUsername');
+const registerPasswordInput = document.getElementById('registerPassword');
+const registerButton = document.getElementById('registerButton');
+const authErrorDisplay = document.getElementById('authError');
+// Get App Elements
 const playerNameInput = document.getElementById('playerName');
 const charHPInput = document.getElementById('charHP');
 const RollD20Button = document.getElementById('rollD20');
@@ -9,7 +20,7 @@ const rollResultDisplay = document.getElementById('rollResult');
 const chatMessagesDiv = document.getElementById('chat-messages');
 const chatInput = document.getElementById('chatInput');
 const sendChatButton = document.getElementById('sendChat');
-
+const appContainer = document.getElementById('app-container')
 // Connection Test
 console.log("Socket.IO script loaded, trying to connect...");
 // Listen for connect
@@ -62,7 +73,7 @@ sendChatButton.addEventListener('click',()=>{
 
 // Add enter to send chat
 chatInput.addEventListener('keydown',(event)=>{
-    if(event.key == "Enter"){
+    if(event.key === "Enter"){
         console.log("Enter key was pressed!");
         const senderName = getPlayerName();
         const message = chatInput.value.trim();
@@ -89,7 +100,7 @@ socket.on('server message',(msgData)=>{
 
 // Func to get player name
 function getPlayerName(){
-    return playerNameInput.value.trim() || `Player ${socket.id.substring(0,5)}`;
+    return currentAuthenticatedUsername || playerNameInput.value.trim() || `Player ${socket.id.substring(0,5)}`;
 }
 
 // Dice Roll 
@@ -112,8 +123,76 @@ socket.on('roll result',(data)=>{
     addMessageToChat(message);// Display in chat
     rollResultDisplay.textContent = `Last roll: ${data.rollerName} got ${data.result}`; // Update general display
 });
+socket.on('auth success', (authData) => { 
+    console.log('Auth Success:', authData);
+    currentAuthenticatedUsername = authData.username;
+    currentCharacterSheet = authData.sheet; // Store the sheet
+    // Update UI and disable editing
+    if (playerNameInput) {
+        playerNameInput.value = currentAuthenticatedUsername;
+        playerNameInput.disabled = true; 
+    }
+    if (charHPInput && currentCharacterSheet && typeof currentCharacterSheet.hpCurr !== 'undefined') {
+         charHPInput.value = currentCharacterSheet.hpCurr;
+    }
+    
+    addMessageToChat(`Logged in as ${currentAuthenticatedUsername}. Welcome!`);
+});
 // Placeholder for Character Sheet
 // Add listeners to emit changes to server later
 
 // Inital message
 addMessageToChat('Welcome! Connecting to server...');
+
+// Auth Handling
+if(loginButton){
+    loginButton.addEventListener('click',()=>{
+        const username = loginUsernameInput.value.trim();
+        const password = loginPasswordInput.value.trim();
+        if(username&&password){
+            socket.emit('login',{username,password});
+            authErrorDisplay.textContent='';
+        }else{
+            authErrorDisplay.textContent='Username and password are required for login';
+        }
+    });
+}
+
+if(registerButton){
+    registerButton.addEventListener('click',()=>{
+        const username = registerUsernameInput.value.trim();
+        const password = registerPasswordInput.value.trim();
+        if (username && password){
+            socket.emit('register',{username,password});
+            authErrorDisplay.textContent='';
+        }else{
+            authErrorDisplay.textContent="Username and password are required for registeration";
+        }
+    });
+}
+// Listen for auth success 
+socket.on('auth success', (authData) => {
+    console.log('Auth Success:', authData);
+    currentAuthenticatedUsername = authData.username;
+    currentCharacterSheet = authData.sheet;
+
+    // Update UI
+    if (authArea) authArea.style.display = 'none';
+    if (appContainer) appContainer.style.display = 'block'; 
+
+    if (playerNameInput) {
+        playerNameInput.value = currentAuthenticatedUsername;
+    }
+
+    addMessageToChat(`Logged in as ${currentAuthenticatedUsername}. Welcome!`);
+    authErrorDisplay.textContent = ''; // Clear any auth errors
+});
+
+// Listen for auth error
+socket.on('auth error', (errorData) => {
+    console.error('Auth Error:', errorData.message);
+    if (authErrorDisplay) {
+        authErrorDisplay.textContent = `Error: ${errorData.message}`;
+    }
+    
+});

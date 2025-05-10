@@ -8,12 +8,29 @@
 </head>
 <body>
     <h1>Welcome to the D&D Room!</h1>
-
-    <div id="app-container">
+    <!-- Auth area, ill show this first and hide the rest-->
+    <div id="auth-area">
+        <h2>Login / Register</h2>
+        <div id="login-form" style="margin-bottom: 20px">
+            <h3>Login</h3>
+            <p>Username: <input type="text" id="loginUsername" placeholder="Username"></p>
+            <p>Password: <input type="password" id="loginPassword" placeholder="Password"></p>
+            <button id="loginButton">Login</button>
+        </div>
+        <hr>
+        <div id="register-form" style="margin-top:20px;">
+            <h3>Register</h3>
+            <p>Username: <input type="text" id="registerUsername" placeholder="Username"></p>
+            <p>Password: <input type="password" id="registerPassword" placeholder="Password"></p>
+            <button id="registerButton">Register</button>
+        </div>
+        <p id="authError" style="color: red; margin-top: 15px;"></p>
+    </div>
+    <div id="app-container" style="display: none"> <!--- start with this hidden-->
         <!-- Character Sheet Area-->
          <div id="character-sheet-area">
             <h2>Character Sheet</h2>
-            <p> Player Name: <input type="text" id="playerName" placeholder="Your Name"></p>
+            <p> Player Name: <input type="text" id="playerName" placeholder="Your Name" readonly></p>
             <p>HP: <input type ="number" id="charHP" value="10"></p>
             <!-- Just testing for now, will obv add more stuff later-->
          </div>

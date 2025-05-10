@@ -18,7 +18,10 @@
   "homepage": "https://github.com/samuel98t/Dnd#readme",
   "description": "",
   "dependencies": {
+    "bcrypt": "^5.1.1",
+    "dotenv": "^16.5.0",
     "express": "^5.1.0",
+    "mongoose": "^8.14.2",
     "socket.io": "^4.8.1"
   }
 }

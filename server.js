@@ -3,16 +3,88 @@ const express = require('express');
 const http = require('http');
 const socketIO = require('socket.io');
 const path = require('path');
+const bcrypt = require('bcrypt');
+const mongoose = require('mongoose');
+require('dotenv').config();
 
 const app = express();
 const server = http.createServer(app) // Creates HTTP server with Express app.
 const io = socketIO(server) // Attaches Socket.IO to the HTTP server
-// simple storage
+// CONSTS
 const LEN = 50 // Chat history max len
+const SALT_ROUNDS = 10;
+// Global server state
 let chatHistory = [];
+let activeUsers={};
+// ENV Stuff
 const PORT = process.env.PORT || 3000;
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/dnd_room_db';
+
 // Serve the static files from 'public'
 app.use(express.static(path.join(__dirname,'public')));
+
+// Connect to Mongoose
+mongoose.connect(MONGODB_URI,{
+    useNewUrlParser:true,
+    useUnifiedTopology:true,
+}).then(()=>console.log('MongoDB connected sucessfully.')).catch(err=>console.error('MongoDB connection error:',err));
+
+// Mongoose User Schema
+const userSchema = new mongoose.Schema({
+    username:{type:String,required: true,unique:true,trim:true,lowercase:true},
+    passwordHash:{type:String,required:true},
+    createdAt:{type:Date,default:Date.now}
+});
+const User = mongoose.model('User',userSchema);
+
+// Mongoose Sheet Schema
+const characterSheetSchema = new mongoose.Schema({
+    userId : {type:mongoose.Schema.Types.ObjectId,ref:'User',required:true,unique: true},// Link to User
+    playerName:{type:String,required: true}, // the useername
+    characterName:{type:String},
+    characterClass:{type:String},
+    characterLevel:{type:Number,default:1},
+    characterBackground:{type:String},
+    characterSubClass:{type:String},
+    characterAlignment:{type:String},
+    HpMax:{type:Number},
+    hpCurr:{type:Number},
+    characterRace:{type:String},
+    characterArmor:{type:Number},
+    ProficiencyBonus:{type:String},
+    Initative:{type:Number},
+    characterSpeed:{type:Number},
+    hitDice:{type:String},
+    inspiration:{type:Number},
+    strength:{type:Number},
+    strengthMod:{type:String},
+    dexterity:{type:Number},
+    dexterityMod:{type:String},
+    constitution:{type:Number},
+    constitutionMod:{type:String},
+    intelligence:{type:Number},
+    intelligenceMod:{type:String},
+    wisdom:{type:Number},
+    wisdomMod:{type:String},
+    charisma:{type:Number},
+    charsimaMod:{type:String},
+    lastUpdated:{type:Date,default:Date.now}
+
+});
+characterSheetSchema.pre('save', function(next) {
+    this.lastUpdated = Date.now();
+    next();
+});
+const CharacterSheet = mongoose.model('CharacterSheet',characterSheetSchema);
+
+// Helper to format sheets for client (key by playerName)
+function formatSheetsForClient(sheetsArray) {
+    const formatted = {};
+    sheetsArray.forEach(sheet => {
+        formatted[sheet.playerName] = sheet; // Assuming playerName is unique like username
+    });
+    return formatted;
+    }
 
 // Dice roller helper func
 function rollDice(diceString){
@@ -37,24 +109,107 @@ function rollDice(diceString){
 }
 // When a client connects
 io.on('connection',(socket)=>{
-    console.log('A user connected:', socket.id);
+    console.log('A user connected (pre-auth):', socket.id);
+    // Register
+    socket.on('register',async(credentials)=>{
+        const { username, password } = credentials;
+        if (!username || !password) {
+            return socket.emit('auth error', { message: 'Username and password are required.' });
+        }
+        const normalizedUsername = username.trim().toLowerCase();
+        try{
+            const existingUser = await User.findOne({username:normalizedUsername});
+            // if theres already a user with that username 
+            if(existingUser){
+                return socket.emit('auth error',{message:'Username already exists'});
+            }
+            // if username is avaliable , make new user
+            const passwordHash = await bcrypt.hash(password,SALT_ROUNDS);
+            const newUser = new User({username:normalizedUsername,passwordHash});
+            await newUser.save();
+            // make sheet for new user
+            let newSheet = new CharacterSheet({userId:newUser._id,playerName:normalizedUsername});
+            await newSheet.save(); // Save
+            // Add user to active users
+            activeUsers[socket.id] = normalizedUsername;
+            socket.emit('auth success',{username:normalizedUsername,sheet: newSheet.toObject()});
+            socket.emit('chat history', chatHistory);
+            io.emit('server message', { text: `${normalizedUsername} has registered and joined.`, type: 'system' });
+            // Send all sheets after user joins
+            const allSheets = await CharacterSheet.find().lean();
+            io.emit('all character sheets',formatSheetsForClient(allSheets));
+            console.log(`User ${normalizedUsername} registered and logged in.`);
+        } catch (err) {
+            console.error("Registration error:", err);
+            socket.emit('auth error', { message: 'Registration failed. Please try again.' });
+        }
+    });
+    // Login 
+    socket.on('login',async(credentials)=>{
+        const{username,password}= credentials;
+        if(!username || !password){
+            return socket.emit('auth error',{message:'Username and password are required'});
+        }
+        const normalizedUsername = username.trim().toLowerCase();
+        try{
+            // Try to find user
+            const user = await User.findOne({username: normalizedUsername});
+            if(!user){
+                return socket.emit('auth error',{message:'invalid username.'});
+            }
+            if(Object.values(activeUsers).includes(normalizedUsername)){
+                return socket.emit('auth error',{message:`User ${normalizedUsername} is already logged in!`});
+            }
+            // Check if password matches
+            const match = await bcrypt.compare(password,user.passwordHash);
+            if(match){
+                activeUsers[socket.id]=normalizedUsername;
+                let sheet = await CharacterSheet.findOne({userId:user._id}).lean();
+                // Realistically should never happen but just incase
+                if(!sheet){
+                    sheet = new CharacterSheet({userId:user._id,playerName:normalizedUsername});
+                    await sheet.save();
+                    sheet = sheet.toObject();
+                }
+                socket.emit('auth success',{username:normalizedUsername,sheet:sheet});
+                socket.emit('chat history',chatHistory);
+                io.emit('server message',{text:`${normalizedUsername} has logged in `,type:'system'});
+                const allSheets = await CharacterSheet.find().lean();
+                io.emit('all character sheets',formatSheetsForClient(allSheets));
+                io.emit('active user list',Object.values(activeUsers));
+                console.log(`User ${normalizedUsername} logged in.`);
+           } else {
+                socket.emit('auth error', { message: 'Invalid username or password.' });
+            }
+            } catch(err){
+                console.error("Login error:",err);
+                socket.emit('auth error',{message: 'Login failed. Please try again.'})
+            }
+    });
     // Send current chat history to new user
     socket.emit('chat history', chatHistory);
     socket.emit('server message', { text: 'Welcome! You are connected.' }); // Send welcome msg 
 
     // Disconnect event
-    socket.on('disconnect',()=>{
-        console.log(`User disconnected: ${socket.id}`);
-        const disconnectMsg = { text: `User ${socket.id.substring(0,5)} disconnected.`, timestamp: new Date().toLocaleTimeString() };
-        io.emit('server message',disconnectMsg);
-        chatHistory.push({type:'system',...disconnectMsg});
-        if(chatHistory.length >50) chatHistory.shift();
+    socket.on('disconnect',async()=>{
+        const username = activeUsers[socket.id];
+        if(username){
+            console.log(`User ${username} (${socket.id}) disconnected.`)
+            delete activeUsers[socket.id];
+            io.emit('server message', { text: `${username} has disconnected.`, type: 'system' });
+            io.emit('active user list', Object.values(activeUsers));
+            io.emit('player disconnected', username);
+        }else{
+            console.log('A pre-auth user disconnected:', socket.id);
+        }
     });
     // Client message
     socket.on('client message',(msgData)=>{
-        console.log(`Message from client ${msgData.sender || socket.id} `);
+        const username = activeUsers[socket.id];
+        if(!username) return;
+
         const messageToBroadcast = {
-            sender: msgData.sender,
+            sender: username,
             text: msgData.text,
             timestamp: new Date().toLocaleTimeString()
         };
@@ -65,22 +220,22 @@ io.on('connection',(socket)=>{
     })
     // Dice rolls
     socket.on('dice roll',(data)=>{
-        console.log(`Roll request from ${data.rollerName || socket.id}: ${data.rollString}`);
+        const username = activeUsers[socket.id];
+        if(!username) return;
         const serverRollResult = rollDice(data.rollString);
         if (serverRollResult === null){
             // Handle invalid/errors
             socket.emit('roll error',{message:`Invalid dice format: ${data.rollString}`});
-            console.error(`Invalid dice roll string from ${data.rollerName || socket.id.substring(0,5)} : ${data.rollString}`);
             return;
         }
         const rollDataToBroadcast ={
-            rollerName: data.rollerName,
+            rollerName: username,
             rollString: data.rollString,
             result :serverRollResult,
             timestamp: new Date().toLocaleTimeString()
         };
         io.emit('roll result',(rollDataToBroadcast));
-        const chatMessage = `${rollDataToBroadcast.rollerName} rolled ${rollDataToBroadcast.rollString}: ${rollDataToBroadcast.result}`;
+        const chatMessage = `${username} rolled ${rollDataToBroadcast.rollString}: ${rollDataToBroadcast.result}`;
         chatHistory.push({ type: 'roll', text: chatMessage, timestamp: rollDataToBroadcast.timestamp });
         if (chatHistory.length > LEN) chatHistory.shift();
         });
