@@ -31,7 +31,7 @@
          <div id="character-sheet-area">
             <h2>Character Sheet</h2>
             <p> Player Name: <input type="text" id="playerName" placeholder="Your Name" readonly></p>
-            <p>HP: <input type ="number" id="charHP" value="10"></p>
+            <button id="openSheetButton">View Character Sheet</button>
             <!-- Just testing for now, will obv add more stuff later-->
          </div>
 
@@ -50,7 +50,17 @@
             <button id="sendChat">Send</button>
          </div>
     </div>
-
+    <div id="sheetModal" class="modal">
+        <div class="modal-content">
+            <span class="close-button" id="closeSheetModal">×</span>
+            <h2>Character Sheet</h2>
+            <div id="modalSheetContent">
+                <!-- Character sheet details will be populated here by JavaScript -->
+                <p>Loading sheet...</p>
+            </div>
+            <button id="saveSheetButton" style="margin-top: 15px;">Save Changes</button> <!-- For future editing -->
+        </div>
+    </div>
     <!-- Socket IO -->
     <script src="/socket.io/socket.io.js"></script>
     <!-- My Scripts-->

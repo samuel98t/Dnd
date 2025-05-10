@@ -14,13 +14,18 @@ const registerButton = document.getElementById('registerButton');
 const authErrorDisplay = document.getElementById('authError');
 // Get App Elements
 const playerNameInput = document.getElementById('playerName');
-const charHPInput = document.getElementById('charHP');
 const RollD20Button = document.getElementById('rollD20');
 const rollResultDisplay = document.getElementById('rollResult');
 const chatMessagesDiv = document.getElementById('chat-messages');
 const chatInput = document.getElementById('chatInput');
 const sendChatButton = document.getElementById('sendChat');
 const appContainer = document.getElementById('app-container')
+// Get MODAL ELEMENTS 
+const sheetModal = document.getElementById('sheetModal');
+const openSheetButton = document.getElementById('openSheetButton');
+const closeSheetModalButton = document.getElementById('closeSheetModal');
+const modalSheetContent = document.getElementById('modalSheetContent');
+const saveSheetButton = document.getElementById('saveSheetButton');
 // Connection Test
 console.log("Socket.IO script loaded, trying to connect...");
 // Listen for connect
@@ -132,9 +137,6 @@ socket.on('auth success', (authData) => {
         playerNameInput.value = currentAuthenticatedUsername;
         playerNameInput.disabled = true; 
     }
-    if (charHPInput && currentCharacterSheet && typeof currentCharacterSheet.hpCurr !== 'undefined') {
-         charHPInput.value = currentCharacterSheet.hpCurr;
-    }
     
     addMessageToChat(`Logged in as ${currentAuthenticatedUsername}. Welcome!`);
 });
@@ -195,4 +197,193 @@ socket.on('auth error', (errorData) => {
         authErrorDisplay.textContent = `Error: ${errorData.message}`;
     }
     
+});
+
+//Modal Control
+if(openSheetButton){
+    openSheetButton.addEventListener('click',()=>{
+        if(currentCharacterSheet){
+            populateSheetModal(currentCharacterSheet);
+            sheetModal.style.display='block';
+        }else{
+            console.error("Error opening char sheet");
+        }
+    });
+}
+if(closeSheetModalButton){
+    closeSheetModalButton.addEventListener('click',()=>{
+        sheetModal.style.display='none';
+    });
+}
+// Close if user clicks outside it too
+window.addEventListener('click',(event)=>{
+    if(event.target===sheetModal){
+        sheetModal.style.display='none';
+    }
+});
+
+function calculateModifier(score) {
+    const numericScore = parseInt(score, 10);
+    if (isNaN(numericScore)) {
+        return 'N/A'; 
+    }
+    const modifier = Math.floor((numericScore - 10) / 2);
+    return modifier >= 0 ? `+${modifier}` : `${modifier}`; // Prepends '+' for positive/zero
+}
+
+function populateSheetModal(sheetData) {
+    if (!sheetData) {
+        modalSheetContent.innerHTML = '<p>Error: No sheet data available.</p>';
+        return;
+    }
+
+    modalSheetContent.innerHTML = ''; // Clear previous content
+
+    const createDetailElement = (label, value, isEditable = false, fieldKey = null, inputTypeOverride = null) => {
+        const p = document.createElement('p');
+        const strong = document.createElement('strong');
+        strong.textContent = `${label}: `;
+        p.appendChild(strong);
+
+        if (isEditable && fieldKey) {
+            const input = document.createElement('input');
+            if (inputTypeOverride) {
+                input.type = inputTypeOverride;
+            } else if (typeof value === 'number' || ['hpCurr', 'HpMax', 'characterLevel', 'strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma', 'inspiration', 'characterArmor', 'Initative', 'characterSpeed'].includes(fieldKey)) {
+                input.type = 'number';
+            } else {
+                input.type = 'text';
+            }
+            input.value = value || (input.type === 'number' ? 0 : ''); // Default to 0 for numbers
+            input.dataset.field = fieldKey;
+            input.id = `sheetInput-${fieldKey}`;
+            p.appendChild(input);
+
+            // If it's an ability score, add a span for its dynamic modifier
+            const abilityScores = ['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'];
+            if (abilityScores.includes(fieldKey)) {
+                const modSpan = document.createElement('span');
+                modSpan.id = `sheetMod-${fieldKey}`;
+                modSpan.textContent = ` (Mod: ${calculateModifier(input.value)})`;
+                modSpan.style.marginLeft = '10px'; // Some spacing
+                p.appendChild(modSpan);
+
+                // Add event listener to update modifier dynamically
+                input.addEventListener('input', (event) => {
+                    modSpan.textContent = ` (Mod: ${calculateModifier(event.target.value)})`;
+                });
+            }
+        } else {
+            p.appendChild(document.createTextNode(value || 'N/A'));
+        }
+        return p;
+    };
+
+    //  Basic Info Section 
+    const basicInfoDiv = document.createElement('div');
+    basicInfoDiv.innerHTML = '<h3>Basic Information</h3>';
+    basicInfoDiv.appendChild(createDetailElement('Player Name', sheetData.playerName));
+    basicInfoDiv.appendChild(createDetailElement('Character Name', sheetData.characterName, true, 'characterName'));
+    basicInfoDiv.appendChild(createDetailElement('Class', sheetData.characterClass, true, 'characterClass'));
+    basicInfoDiv.appendChild(createDetailElement('Subclass', sheetData.characterSubClass, true, 'characterSubClass'));
+    basicInfoDiv.appendChild(createDetailElement('Level', sheetData.characterLevel, true, 'characterLevel', 'number'));
+    basicInfoDiv.appendChild(createDetailElement('Race', sheetData.characterRace, true, 'characterRace'));
+    basicInfoDiv.appendChild(createDetailElement('Background', sheetData.characterBackground, true, 'characterBackground'));
+    basicInfoDiv.appendChild(createDetailElement('Alignment', sheetData.characterAlignment, true, 'characterAlignment'));
+    modalSheetContent.appendChild(basicInfoDiv);
+
+    modalSheetContent.appendChild(document.createElement('hr'));
+
+    // --- Combat Stats Section ---
+    const combatStatsDiv = document.createElement('div');
+    combatStatsDiv.innerHTML = '<h3>Combat Stats</h3>';
+    combatStatsDiv.appendChild(createDetailElement('Current HP', sheetData.hpCurr, true, 'hpCurr', 'number'));
+    combatStatsDiv.appendChild(createDetailElement('Max HP', sheetData.HpMax, true, 'HpMax', 'number'));
+    combatStatsDiv.appendChild(createDetailElement('Armor Class', sheetData.characterArmor, true, 'characterArmor', 'number'));
+    combatStatsDiv.appendChild(createDetailElement('Initiative', sheetData.Initative, true, 'Initative', 'number')); // Note: Initiative is often DEX mod + prof (if applicable) + other bonuses. For now, a direct input.
+    combatStatsDiv.appendChild(createDetailElement('Speed', sheetData.characterSpeed, true, 'characterSpeed', 'number'));
+    combatStatsDiv.appendChild(createDetailElement('Hit Dice', sheetData.hitDice, true, 'hitDice'));
+    combatStatsDiv.appendChild(createDetailElement('Inspiration', sheetData.inspiration, true, 'inspiration', 'number'));
+    modalSheetContent.appendChild(combatStatsDiv);
+
+    modalSheetContent.appendChild(document.createElement('hr'));
+
+    // Abilities Section 
+    const abilitiesDiv = document.createElement('div');
+    abilitiesDiv.innerHTML = '<h3>Abilities</h3>';
+    const abilitiesGrid = document.createElement('div');
+    abilitiesGrid.className = 'sheet-grid';
+
+    // For each ability, createDetailElement will  handle adding the dynamic modifier span
+    abilitiesGrid.appendChild(createDetailElement('Strength', sheetData.strength, true, 'strength', 'number'));
+    abilitiesGrid.appendChild(createDetailElement('Dexterity', sheetData.dexterity, true, 'dexterity', 'number'));
+    abilitiesGrid.appendChild(createDetailElement('Constitution', sheetData.constitution, true, 'constitution', 'number'));
+    abilitiesGrid.appendChild(createDetailElement('Intelligence', sheetData.intelligence, true, 'intelligence', 'number'));
+    abilitiesGrid.appendChild(createDetailElement('Wisdom', sheetData.wisdom, true, 'wisdom', 'number'));
+    abilitiesGrid.appendChild(createDetailElement('Charisma', sheetData.charisma, true, 'charisma', 'number'));
+
+    abilitiesDiv.appendChild(abilitiesGrid);
+    modalSheetContent.appendChild(abilitiesDiv);
+
+    modalSheetContent.appendChild(document.createElement('hr'));
+
+    if (saveSheetButton) saveSheetButton.style.display = 'inline-block';
+}
+
+// Save sheet button
+if (saveSheetButton) {
+    saveSheetButton.addEventListener('click', () => {
+        if (!currentCharacterSheet || !currentAuthenticatedUsername) {
+            console.error("Cannot save sheet: User not authenticated or sheet data missing.");
+            addMessageToChat("Error: Cannot save sheet. Please try logging in again.");
+            return;
+        }
+
+        const updatedSheetData = {};
+        const inputs = modalSheetContent.querySelectorAll('input[data-field]');
+
+        inputs.forEach(currentInput => { 
+            const fieldKey = currentInput.dataset.field;
+            let value = currentInput.value;
+
+            // Get the original value from the currentCharacterSheet for type comparison
+            const originalValue = currentCharacterSheet[fieldKey];
+            if (currentInput.type === 'number' || (typeof originalValue === 'number' && value.trim() !== '')) {
+                value = parseFloat(value);
+                if (isNaN(value)) {
+                    console.warn(`Invalid number for ${fieldKey}: '${currentInput.value}'. Reverting or defaulting.`);
+                    value = (typeof originalValue === 'number' && !isNaN(originalValue)) ? originalValue : 0;
+                }
+            }
+            updatedSheetData[fieldKey] = value;
+        });
+
+        console.log("Emitting 'update character sheet' with data:", updatedSheetData);
+        socket.emit('update character sheet', {
+            sheetUpdates: updatedSheetData
+        });
+
+        addMessageToChat("Saving character sheet changes...");
+
+    });
+}
+        
+    socket.on('sheet update error', (errorData) => {
+    console.error('Sheet Update Error:', errorData.message);
+    addMessageToChat(`Error saving sheet: ${errorData.message}`);
+});
+// Listen for updated
+socket.on('character sheet updated', (data) => {
+    console.log('Received "character sheet updated":', data);
+
+
+    if (data.playerName === currentAuthenticatedUsername) {
+        currentCharacterSheet = data.updatedSheet; //Update the local copy
+        if (sheetModal.style.display === 'block') {
+            populateSheetModal(currentCharacterSheet);
+        }
+
+    } else {
+        console.log(`Sheet updated for ${data.playerName} (another user).`);
+    }
 });

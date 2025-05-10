@@ -57,17 +57,11 @@ const characterSheetSchema = new mongoose.Schema({
     hitDice:{type:String},
     inspiration:{type:Number},
     strength:{type:Number},
-    strengthMod:{type:String},
     dexterity:{type:Number},
-    dexterityMod:{type:String},
     constitution:{type:Number},
-    constitutionMod:{type:String},
     intelligence:{type:Number},
-    intelligenceMod:{type:String},
     wisdom:{type:Number},
-    wisdomMod:{type:String},
     charisma:{type:Number},
-    charsimaMod:{type:String},
     lastUpdated:{type:Date,default:Date.now}
 
 });
@@ -189,7 +183,59 @@ io.on('connection',(socket)=>{
     // Send current chat history to new user
     socket.emit('chat history', chatHistory);
     socket.emit('server message', { text: 'Welcome! You are connected.' }); // Send welcome msg 
+    // Update character sheet
+    socket.on('update character sheet', async (data) => {
+    const username = activeUsers[socket.id];
+    if (!username) {
+        return socket.emit('sheet update error', { message: 'User not authenticated.' });
+    }
 
+    if (!data || !data.sheetUpdates) {
+        return socket.emit('sheet update error', { message: 'No sheet update data provided.' });
+    }
+
+    try {
+        const user = await User.findOne({ username: username });
+        if (!user) {
+            return socket.emit('sheet update error', { message: 'User not found.' });
+        }
+
+        const sheet = await CharacterSheet.findOne({ userId: user._id });
+        if (!sheet) {
+            return socket.emit('sheet update error', { message: 'Character sheet not found.' });
+        }
+
+        // Apply updates
+        // Make sure to only update fields that are actually in your schema
+        const allowedFields = Object.keys(CharacterSheet.schema.paths);
+        for (const key in data.sheetUpdates) {
+            if (allowedFields.includes(key) && key !== '_id' && key !== 'userId' && key !== 'playerName') {
+                // Special handling for numbers that might come as strings
+                if (CharacterSheet.schema.paths[key].instance === 'Number') {
+                    const numValue = parseFloat(data.sheetUpdates[key]);
+                    sheet[key] = isNaN(numValue) ? (sheet[key] || 0) : numValue; // Default to current or 0 if NaN
+                } else {
+                    sheet[key] = data.sheetUpdates[key];
+                }
+            } else {
+                console.warn(`Attempted to update disallowed or non-existent field: ${key}`);
+            }
+        }
+
+        await sheet.save(); 
+
+        console.log(`Character sheet for ${username} updated successfully.`);
+
+        io.emit('character sheet updated', {
+            playerName: username,
+            updatedSheet: sheet.toObject() // Send the full, updated sheet as a plain object
+        });
+
+    } catch (err) {
+        console.error("Error updating character sheet:", err);
+        socket.emit('sheet update error', { message: 'Server error while saving sheet.' });
+    }
+    });
     // Disconnect event
     socket.on('disconnect',async()=>{
         const username = activeUsers[socket.id];
@@ -238,8 +284,9 @@ io.on('connection',(socket)=>{
         const chatMessage = `${username} rolled ${rollDataToBroadcast.rollString}: ${rollDataToBroadcast.result}`;
         chatHistory.push({ type: 'roll', text: chatMessage, timestamp: rollDataToBroadcast.timestamp });
         if (chatHistory.length > LEN) chatHistory.shift();
-        });
+        });;
     });
+
 
 
 // Start the server.

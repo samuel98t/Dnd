@@ -18,7 +18,7 @@ body {
     min-width: 250px;
 }
 
-h1, h2 {
+h1, h2,h3 {
     color: #333;
 }
 
@@ -49,4 +49,67 @@ button {
 
 button:hover {
     background-color: #0056b3;
+}
+
+.modal {
+    display: none; 
+    position: fixed; 
+    z-index: 1000; 
+    left: 0;
+    top: 0;
+    width: 100%; 
+    height: 100%; 
+    overflow: auto; 
+    background-color: rgba(0,0,0,0.5); 
+    padding-top: 60px; 
+}
+
+.modal-content {
+    background-color: #fefefe;
+    margin: 5% auto; 
+    padding: 20px;
+    border: 1px solid #888;
+    width: 80%; 
+    max-width: 700px; 
+    border-radius: 8px;
+    position: relative;
+    max-height: 80vh; 
+    overflow-y: auto; 
+}
+
+.close-button {
+    color: #aaa;
+    float: right; 
+    position: absolute; 
+    top: 10px;
+    right: 20px;
+    font-size: 28px;
+    font-weight: bold;
+}
+
+.close-button:hover,
+.close-button:focus {
+    color: black;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+#modalSheetContent p {
+    margin-bottom: 8px;
+    line-height: 1.6;
+}
+#modalSheetContent p strong {
+    display: inline-block;
+    min-width: 150px; 
+}
+
+/* Simple grid for two-column layout in modal if needed */
+.sheet-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); /* Responsive columns */
+    gap: 15px;
+}
+
+.sheet-grid div p { 
+    margin-bottom: 5px;
 }
