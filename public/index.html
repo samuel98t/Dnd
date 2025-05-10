@@ -37,6 +37,7 @@
                 <h2>Character Sheet</h2>
                 <p> Player Name: <input type="text" id="playerName" placeholder="Your Name" readonly></p>
                 <button id="openSheetButton">View Character Sheet</button>
+                <button id="openInventoryButton" style="margin-top: 10px;">Manage Inventory</button>
             </div>
 
             <div id="dice-roll-area">
@@ -72,6 +73,19 @@
                 <p>Loading sheet...</p>
             </div>
             <button id="saveSheetButton" style="margin-top: 15px;">Save Changes</button>
+        </div>
+    </div>
+
+    <!-- Inventory-->
+    <div id="inventoryModal" class="modal">
+        <div class="'modal-content">
+            <span class ="close-button" id="closeInventoryModal">x</span>
+            <h2>Inventory</h2>
+            <div id="modalInventoryContent">
+            <!-- Stuff should be here-->
+            <p>Loading Inventory</p>
+            </div>
+            <button id="saveInventoryButton" style="margin-top: 15px;">Save Inventory</button>
         </div>
     </div>
 

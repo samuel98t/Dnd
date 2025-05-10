@@ -62,6 +62,14 @@ const characterSheetSchema = new mongoose.Schema({
     intelligence:{type:Number},
     wisdom:{type:Number},
     charisma:{type:Number},
+        inventory: { // THIS FIELD MUST EXIST
+        type: [{
+            name: { type: String, required: true, trim: true },
+            quantity: { type: Number, default: 1, min: 0 },
+            description: { type: String, default: '', trim: true }
+        }],
+        default: []
+    },
     lastUpdated:{type:Date,default:Date.now}
 
 });

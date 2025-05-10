@@ -26,6 +26,12 @@ const openSheetButton = document.getElementById('openSheetButton');
 const closeSheetModalButton = document.getElementById('closeSheetModal');
 const modalSheetContent = document.getElementById('modalSheetContent');
 const saveSheetButton = document.getElementById('saveSheetButton');
+// Get Inventory Modal Elements
+const openInventoryButton = document.getElementById('openInventoryButton');
+const inventoryModal = document.getElementById('inventoryModal');
+const closeInventoryModalButton = document.getElementById('closeInventoryModal');
+const modalInventoryContent = document.getElementById('modalInventoryContent');
+const saveInventoryButton = document.getElementById('saveInventoryButton');
 // Get sidebar
 const userListUL = document.getElementById('user-list');
 // Connection Test
@@ -211,6 +217,9 @@ window.addEventListener('click',(event)=>{
     if(event.target===sheetModal){
         sheetModal.style.display='none';
     }
+    if (event.target ===inventoryModal){
+        inventoryModal.style.display='none';
+    }
 });
 
 function calculateModifier(score) {
@@ -367,11 +376,23 @@ if (saveSheetButton) {
 socket.on('character sheet updated', (data) => {
     console.log('Received "character sheet updated":', data);
 
-
     if (data.playerName === currentAuthenticatedUsername) {
-        currentCharacterSheet = data.updatedSheet; //Update the local copy
+        if (!currentCharacterSheet) currentCharacterSheet = {}; // Initialize if somehow null
+        for (const key in data.updatedSheet) {
+            if (Object.prototype.hasOwnProperty.call(data.updatedSheet, key)) {
+                currentCharacterSheet[key] = data.updatedSheet[key];
+            }
+        }
+        
+        addMessageToChat(`Sheet data for ${data.playerName} has been updated.`);
+
+        // If the main sheet modal is open, refresh its content 
         if (sheetModal.style.display === 'block') {
             populateSheetModal(currentCharacterSheet);
+        }
+        // If inventory modal is open, refresh its content
+        if (inventoryModal.style.display === 'block') {
+            populateInventoryModal(currentCharacterSheet.inventory || []); // Pass the inventory part
         }
 
     } else {
@@ -405,3 +426,147 @@ socket.on('update user list', (userArray) => { // userArray is expected to be an
     console.log('Received "update user list":', userArray);
     updateUserList(userArray);
 });
+
+// Populate inventory modal
+function populateInventoryModal(inventoryDataArray) {
+    if (!modalInventoryContent) {
+        console.error("element not found");
+        return;
+    }
+    modalInventoryContent.innerHTML = '';
+
+    const inventoryListContainerDiv = document.createElement('div');
+    inventoryListContainerDiv.id = 'inventory-list-display';
+
+    // Fixing syntax errors here
+    const createInventoryItemRowElement = (item = {}, index) => {
+        const itemRowDiv = document.createElement('div'); // Declare the itemRowDiv
+        itemRowDiv.className = 'inventory-item-row';
+
+        const nameInput = document.createElement('input');
+        nameInput.type = 'text';
+        nameInput.value = item.name || '';
+        nameInput.placeholder = "Item Name";
+        nameInput.className = 'inventory-item-name';
+
+        const qtyInput = document.createElement('input');
+        qtyInput.type = 'number';
+        qtyInput.value = item.quantity === undefined ? 1 : item.quantity; // Fixing assignment with `=`
+        qtyInput.min = '0';
+        qtyInput.placeholder = 'Quantity';
+        qtyInput.className = "inventory-item-qty";
+
+        const descInput = document.createElement('input');
+        descInput.type = 'text';
+        descInput.value = item.description || '';
+        descInput.placeholder = 'Description (optional)';
+        descInput.className = 'inventory-item-desc';
+
+        const removeButton = document.createElement('button');
+        removeButton.textContent = 'Remove';
+        removeButton.className = 'remove-item-btn';
+        removeButton.type = 'button';
+        removeButton.onclick = () => {
+            itemRowDiv.remove();
+        };
+
+        itemRowDiv.appendChild(nameInput);
+        itemRowDiv.appendChild(qtyInput);
+        itemRowDiv.appendChild(descInput);
+        itemRowDiv.appendChild(removeButton);
+
+        return itemRowDiv;
+    };
+
+    if (inventoryDataArray && Array.isArray(inventoryDataArray)) {
+        inventoryDataArray.forEach((item, index) => {
+            inventoryListContainerDiv.appendChild(createInventoryItemRowElement(item, index));
+        });
+    }else{
+        const noItemsMsg = document.createElement('p');
+        noItemsMsg.textContent = "No items in inventory. Click 'Add New Item' to start.";
+        inventoryListContainerDiv.appendChild(noItemsMsg);
+    }
+    modalInventoryContent.appendChild(inventoryListContainerDiv);
+    // "Add New Item" button for the inventory modal
+    const addItemButton = document.createElement('button');
+    addItemButton.textContent = 'Add New Item';
+    addItemButton.type = 'button';
+    addItemButton.id = 'add-inventory-item-btn'; // For CSS styling
+    addItemButton.onclick = () => {
+        const noItemsMessageElement = inventoryListContainerDiv.querySelector('p');
+        if (noItemsMessageElement && noItemsMessageElement.textContent.startsWith("No items")) {
+            noItemsMessageElement.remove();
+        }
+        
+        const newItemRow = createInventoryItemRowElement(); // Creates a blank item row
+        inventoryListContainerDiv.appendChild(newItemRow);
+        const newNameInput = newItemRow.querySelector('.inventory-item-name');
+        if (newNameInput) {
+            newNameInput.focus(); 
+        }
+    };
+    modalInventoryContent.appendChild(addItemButton);
+
+    if (saveInventoryButton) saveInventoryButton.style.display = 'inline-block';
+}
+// Open inventory
+if (openInventoryButton) {
+    openInventoryButton.addEventListener('click', () => {
+        if (currentCharacterSheet) {
+            // currentCharacterSheet.inventory should exist (even as [])
+            // due to server-side schema default and auth success data
+            populateInventoryModal(currentCharacterSheet.inventory || []);
+            inventoryModal.style.display = 'block';
+        } else {
+            addMessageToChat("Please log in to manage inventory.");
+            console.warn("Cannot open inventory: currentCharacterSheet is not available.");
+        }
+    });
+}
+// Close inventory
+if (closeInventoryModalButton) {
+    closeInventoryModalButton.addEventListener('click', () => {
+        inventoryModal.style.display = 'none';
+    });
+}
+
+// Save inventory 
+if (saveInventoryButton) {
+    saveInventoryButton.addEventListener('click', () => {
+        if (!currentCharacterSheet || !currentAuthenticatedUsername) {
+            console.error("Cannot save inventory: User not authenticated or sheet data missing.");
+            addMessageToChat("Error: Cannot save inventory. Please log in again.");
+            return;
+        }
+
+        const newInventory = [];
+        // Select all DOM rows representing inventory items from the inventory modal
+        const inventoryItemRows = modalInventoryContent.querySelectorAll('#inventory-list-display .inventory-item-row');
+
+        inventoryItemRows.forEach(row => {
+            const nameInput = row.querySelector('.inventory-item-name');
+            const qtyInput = row.querySelector('.inventory-item-qty');
+            const descInput = row.querySelector('.inventory-item-desc');
+
+            const name = nameInput ? nameInput.value.trim() : '';
+            const quantity = qtyInput ? parseInt(qtyInput.value, 10) : 1; // Default to 1 if not parsable
+            const description = descInput ? descInput.value.trim() : '';
+
+            if (name) { // Only add/save the item if it has a name
+                newInventory.push({
+                    name: name,
+                    quantity: isNaN(quantity) || quantity < 0 ? 0 : quantity, // Ensure quantity is valid
+                    description: description
+                });
+            }
+        });
+
+        console.log("Emitting 'update character sheet' (inventory only) with data:", newInventory);
+        socket.emit('update character sheet', {
+            sheetUpdates: { inventory: newInventory } // Send ONLY the inventory array
+        });
+
+        addMessageToChat("Saving inventory changes...");
+    });
+}
