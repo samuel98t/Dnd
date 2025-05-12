@@ -3,6 +3,7 @@ const socket = io();
 let currentUserIsDM = false;
 let currentAuthenticatedUsername = null;
 let currentCharacterSheet = null; // To store the user's sheet
+let allCharacterSheets = {}; // Store sheets keyed by playerName
 // Get Attacks Modal Elements
 const openAttacksButton = document.getElementById('openAttacksButton');
 const attacksModal = document.getElementById('attacksModal');
@@ -146,6 +147,12 @@ socket.on('chat history',(history)=>{
     });
 });
 
+socket.on('all character sheets', (sheetsData) => {
+    console.log("Received all character sheets:", sheetsData);
+    allCharacterSheets = sheetsData;
+    // Re-render the user list now that we have sheet data (for HP display)
+    updateUserList(Object.keys(allCharacterSheets)); // Assuming keys are usernames
+});
 // Basic chat implement.
 function addMessageToChat(message, className = "") {
     const msgElement = document.createElement('p');
@@ -622,6 +629,11 @@ if (saveSheetButton) {
 // Listen for updated
 socket.on('character sheet updated', (data) => {
     console.log('Received "character sheet updated":', data);
+    // Update the global store REGARDLESS of who it is
+    if (data.playerName && data.updatedSheet) {
+        allCharacterSheets[data.playerName] = data.updatedSheet;
+        console.log(`Updated allCharacterSheets for ${data.playerName}`);
+    }
 
     if (data.playerName === currentAuthenticatedUsername) {
         if (!currentCharacterSheet) currentCharacterSheet = {};
@@ -640,7 +652,7 @@ socket.on('character sheet updated', (data) => {
         }
         // If the inventory modal is open and inventory was updated, refresh it
         if (inventoryModal.style.display === 'block' && data.updatedSheet.inventory) {
-             populateInventoryModal(currentCharacterSheet.inventory || []);
+             populateInventoryModal(currentCharacterSheet.inventory || []),currentCharacterSheet;
         }
         // *** ADD THIS CHECK ***
         // If the feats modal is open and feats/traits were updated, refresh it
@@ -657,7 +669,7 @@ socket.on('character sheet updated', (data) => {
            console.log("Spell data updated, refresh needed (implement populateSpellsModal).");
         }
          // *** ADD THIS CHECK (for inventory money - Phase 2) ***
-         if (inventoryModal.style.display === 'block') {
+         if (inventoryModal.style.display === 'block'|| [],currentCharacterSheet) {
              // Repopulate inventory list AND money fields
               populateInventoryModal(currentCharacterSheet.inventory || [], currentCharacterSheet); // Pass full sheet
          }
@@ -668,20 +680,51 @@ socket.on('character sheet updated', (data) => {
         console.log(`Sheet updated for ${data.playerName} (another user).`);
         // Potentially update a global sheet store if you implement one later
     }
+    updateUserList(Object.keys(allCharacterSheets));
 });
 
 // sidebar helper func
-function updateUserList(users) {
-    if (!userListUL) return; 
+function updateUserList(users) { // users is an array of usernames
+    if (!userListUL) return;
 
-    userListUL.innerHTML = ''; // Clear the current list )
+    userListUL.innerHTML = ''; // Clear the current list
 
     if (users && users.length > 0) {
+        // Sort users alphabetically, current user first (optional)
+        users.sort((a, b) => {
+            if (a === currentAuthenticatedUsername) return -1;
+            if (b === currentAuthenticatedUsername) return 1;
+            return a.localeCompare(b);
+        });
+
         users.forEach(username => {
             const li = document.createElement('li');
-            li.textContent = username;
+            const userSheet = allCharacterSheets[username]; // Get sheet from store
+            const hpCurr = userSheet?.hpCurr ?? '?'; // Use ?? for nullish coalescing
+            const hpMax = userSheet?.HpMax ?? '?';
+
+            // Create a clickable element (<a> or <span>)
+            const nameSpan = document.createElement('span'); // Using span for simpler styling/no href
+            nameSpan.textContent = username;
+            nameSpan.style.cursor = 'pointer';
+            nameSpan.style.textDecoration = 'underline';
+            nameSpan.style.color = 'var(--link-color)'; // Use CSS variable
+            nameSpan.dataset.username = username; // Store username for click handler
+
+            // Add HP info
+            const hpInfo = document.createElement('span');
+            hpInfo.textContent = ` (HP: ${hpCurr}/${hpMax})`;
+            hpInfo.style.fontSize = '0.9em';
+            hpInfo.style.color = 'var(--text-color-light)';
+
+            li.appendChild(nameSpan);
+            li.appendChild(hpInfo);
+
             if (username === currentAuthenticatedUsername) {
-                li.innerHTML += ' <strong>(You)</strong>'; // Highlight the current user
+                const youSpan = document.createElement('strong');
+                youSpan.textContent = ' (You)';
+                youSpan.style.color = 'var(--user-list-highlight)'; // Use CSS variable
+                li.appendChild(youSpan);
             }
             userListUL.appendChild(li);
         });
@@ -691,20 +734,48 @@ function updateUserList(users) {
         userListUL.appendChild(li);
     }
 }
+if (userListUL) {
+    userListUL.addEventListener('click', (event) => {
+        // Check if the clicked element or its parent has the 'data-username' attribute
+        let targetElement = event.target;
+        while (targetElement != null && !targetElement.dataset.username) {
+            // Check parent if current element isn't the one with data-username (e.g., clicked the HP span)
+            if(targetElement.parentElement === userListUL) break; // Stop if we reach the list itself
+            targetElement = targetElement.parentElement;
+        }
+
+        if (targetElement && targetElement.dataset.username) {
+            const usernameToView = targetElement.dataset.username;
+            console.log(`Clicked to view sheet for: ${usernameToView}`);
+            openSheetForViewing(usernameToView);
+        }
+    });
+}
+
 // listen for user list updates from server
 socket.on('update user list', (userArray) => { // userArray is expected to be an array of usernames
     console.log('Received "update user list":', userArray);
     updateUserList(userArray);
 });
 
-// Populate inventory modal
-function populateInventoryModal(inventoryDataArray, sheetData = null) {
+// --- populateInventoryModal (Ensure previous modifications + Read-Only) ---
+// Add isReadOnly parameter
+function populateInventoryModal(inventoryDataArray, sheetData = null, isReadOnly = false) {
     if (!modalInventoryContent) {
-        console.error("element not found");
+        console.error("Inventory modal content element not found!");
         return;
     }
-    modalInventoryContent.innerHTML = '';
-        // *** POPULATE MONEY INPUTS ***
+    modalInventoryContent.innerHTML = ''; // Clear
+
+    // --- Add Title indication ---
+    const titleH2 = inventoryModal.querySelector('h2'); // Find the h2 in the modal
+    if(titleH2) {
+        titleH2.textContent = isReadOnly ? `Viewing ${sheetData?.playerName || 'User'}'s Inventory (Read-Only)` : "Inventory";
+    }
+    // --- End Title ---
+
+
+    // --- POPULATE MONEY INPUTS (and disable if read-only) ---
     const moneyCPInput = document.getElementById('moneyCP');
     const moneySPInput = document.getElementById('moneySP');
     const moneyEPInput = document.getElementById('moneyEP');
@@ -717,21 +788,36 @@ function populateInventoryModal(inventoryDataArray, sheetData = null) {
         moneyEPInput.value = sheetData.ep || 0;
         moneyGPInput.value = sheetData.gp || 0;
         moneyPPInput.value = sheetData.pp || 0;
-    } else if (sheetData === null) {
-         // Clear fields if no sheet data (e.g., before login)
-         moneyCPInput.value = 0;
-         moneySPInput.value = 0;
-         moneyEPInput.value = 0;
-         moneyGPInput.value = 0;
-         moneyPPInput.value = 0;
+
+        // Disable if read-only
+        moneyCPInput.disabled = isReadOnly;
+        moneySPInput.disabled = isReadOnly;
+        moneyEPInput.disabled = isReadOnly;
+        moneyGPInput.disabled = isReadOnly;
+        moneyPPInput.disabled = isReadOnly;
+
+    } else { // Covers sheetData === null or missing inputs
+         // Clear fields if no sheet data
+         if(moneyCPInput) moneyCPInput.value = 0;
+         if(moneySPInput) moneySPInput.value = 0;
+         if(moneyEPInput) moneyEPInput.value = 0;
+         if(moneyGPInput) moneyGPInput.value = 0;
+         if(moneyPPInput) moneyPPInput.value = 0;
+         // Also disable if no sheet data or if explicitly read-only
+         if(moneyCPInput) moneyCPInput.disabled = true;
+         if(moneySPInput) moneySPInput.disabled = true;
+         if(moneyEPInput) moneyEPInput.disabled = true;
+         if(moneyGPInput) moneyGPInput.disabled = true;
+         if(moneyPPInput) moneyPPInput.disabled = true;
     }
-    // *** END POPULATE MONEY ***
+    // --- END POPULATE MONEY ---
+
     const inventoryListContainerDiv = document.createElement('div');
     inventoryListContainerDiv.id = 'inventory-list-display';
 
-    // Fixing syntax errors here
-    const createInventoryItemRowElement = (item = {}, index) => {
-        const itemRowDiv = document.createElement('div'); // Declare the itemRowDiv
+    // Modified row creation function (internal to populateInventoryModal)
+    const createInventoryItemRowElement = (item = {}) => { // isReadOnly is available via closure
+        const itemRowDiv = document.createElement('div');
         itemRowDiv.className = 'inventory-item-row';
 
         const nameInput = document.createElement('input');
@@ -739,67 +825,79 @@ function populateInventoryModal(inventoryDataArray, sheetData = null) {
         nameInput.value = item.name || '';
         nameInput.placeholder = "Item Name";
         nameInput.className = 'inventory-item-name';
+        nameInput.disabled = isReadOnly; // <<< Disable
 
         const qtyInput = document.createElement('input');
         qtyInput.type = 'number';
-        qtyInput.value = item.quantity === undefined ? 1 : item.quantity; // Fixing assignment with `=`
+        qtyInput.value = item.quantity === undefined ? 1 : item.quantity;
         qtyInput.min = '0';
         qtyInput.placeholder = 'Quantity';
         qtyInput.className = "inventory-item-qty";
+        qtyInput.disabled = isReadOnly; // <<< Disable
 
         const descInput = document.createElement('input');
         descInput.type = 'text';
         descInput.value = item.description || '';
         descInput.placeholder = 'Description (optional)';
         descInput.className = 'inventory-item-desc';
-
-        const removeButton = document.createElement('button');
-        removeButton.textContent = 'Remove';
-        removeButton.className = 'remove-item-btn';
-        removeButton.type = 'button';
-        removeButton.onclick = () => {
-            itemRowDiv.remove();
-        };
+        descInput.disabled = isReadOnly; // <<< Disable
 
         itemRowDiv.appendChild(nameInput);
         itemRowDiv.appendChild(qtyInput);
         itemRowDiv.appendChild(descInput);
-        itemRowDiv.appendChild(removeButton);
+
+        // Only add remove button if NOT read-only
+        if (!isReadOnly) {
+            const removeButton = document.createElement('button');
+            removeButton.textContent = 'Remove';
+            removeButton.className = 'remove-item-btn';
+            removeButton.type = 'button';
+            removeButton.onclick = () => {
+                itemRowDiv.remove();
+            };
+            itemRowDiv.appendChild(removeButton);
+        }
 
         return itemRowDiv;
     };
 
-    if (inventoryDataArray && Array.isArray(inventoryDataArray)) {
+    // Populate list using the modified row creation
+    if (inventoryDataArray && Array.isArray(inventoryDataArray) && inventoryDataArray.length > 0) {
         inventoryDataArray.forEach((item, index) => {
             inventoryListContainerDiv.appendChild(createInventoryItemRowElement(item, index));
         });
-    }else{
+    } else {
         const noItemsMsg = document.createElement('p');
-        noItemsMsg.textContent = "No items in inventory. Click 'Add New Item' to start.";
+        noItemsMsg.textContent = isReadOnly ? "Inventory is empty." : "No items in inventory. Click 'Add New Item' to start.";
         inventoryListContainerDiv.appendChild(noItemsMsg);
     }
     modalInventoryContent.appendChild(inventoryListContainerDiv);
-    // "Add New Item" button for the inventory modal
-    const addItemButton = document.createElement('button');
-    addItemButton.textContent = 'Add New Item';
-    addItemButton.type = 'button';
-    addItemButton.id = 'add-inventory-item-btn'; // For CSS styling
-    addItemButton.onclick = () => {
-        const noItemsMessageElement = inventoryListContainerDiv.querySelector('p');
-        if (noItemsMessageElement && noItemsMessageElement.textContent.startsWith("No items")) {
-            noItemsMessageElement.remove();
-        }
-        
-        const newItemRow = createInventoryItemRowElement(); // Creates a blank item row
-        inventoryListContainerDiv.appendChild(newItemRow);
-        const newNameInput = newItemRow.querySelector('.inventory-item-name');
-        if (newNameInput) {
-            newNameInput.focus(); 
-        }
-    };
-    modalInventoryContent.appendChild(addItemButton);
 
-    if (saveInventoryButton) saveInventoryButton.style.display = 'inline-block';
+    // Only show "Add New Item" button if NOT read-only
+    const existingAddButton = document.getElementById('add-inventory-item-btn');
+    if (existingAddButton) existingAddButton.remove(); // Remove old one if exists
+
+    if (!isReadOnly) {
+        const addItemButton = document.createElement('button');
+        addItemButton.textContent = 'Add New Item';
+        addItemButton.type = 'button';
+        addItemButton.id = 'add-inventory-item-btn';
+        addItemButton.onclick = () => {
+             const noItemsMessageElement = inventoryListContainerDiv.querySelector('p');
+             if (noItemsMessageElement && noItemsMessageElement.textContent.startsWith("No items")) {
+                 noItemsMessageElement.remove();
+             }
+             const newItemRow = createInventoryItemRowElement(); // Uses isReadOnly from outer scope (false here)
+             inventoryListContainerDiv.appendChild(newItemRow);
+             newItemRow.querySelector('.inventory-item-name')?.focus();
+        };
+        modalInventoryContent.appendChild(addItemButton);
+    }
+
+    // Hide Save Button in Read-Only Mode
+    if (saveInventoryButton) {
+        saveInventoryButton.style.display = isReadOnly ? 'none' : 'inline-block';
+    }
 }
 // Open inventory
 if (openInventoryButton) {
@@ -1231,49 +1329,99 @@ function createFeatTraitRowElement(featTrait = {}) {
 }
 
 
-// Function to populate the Feats & Traits modal content
-function populateFeatsModal(featsAndTraitsArray) {
+// --- populateFeatsModal (Ensure previous modifications + Read-Only) ---
+// Add isReadOnly parameter
+function populateFeatsModal(featsAndTraitsArray, isReadOnly = false) {
     if (!modalFeatsContent) {
         console.error("Feats modal content element not found!");
         return;
     }
-    modalFeatsContent.innerHTML = ''; // Clear previous content
+    modalFeatsContent.innerHTML = ''; // Clear
+
+    // --- Add Title indication ---
+    const titleH2 = featsModal.querySelector('h2');
+    if(titleH2) {
+        // Fetching player name for title might require passing sheetData if desired
+        titleH2.textContent = isReadOnly ? `Viewing Feats & Traits (Read-Only)` : "Feats & Traits";
+    }
+    // --- End Title ---
 
     const listContainerDiv = document.createElement('div');
-    listContainerDiv.id = 'feats-list-display'; // Use the new ID for the scrollable list
+    listContainerDiv.id = 'feats-list-display';
 
+    // Modified row creation function (internal)
+    const createFeatTraitRowElement = (featTrait = {}) => { // isReadOnly available via closure
+        const itemRowDiv = document.createElement('div');
+        itemRowDiv.className = 'feat-trait-row';
+
+        const nameInput = document.createElement('input');
+        nameInput.type = 'text';
+        nameInput.value = featTrait.name || '';
+        nameInput.placeholder = "Feat/Trait Name";
+        nameInput.className = 'feat-trait-name';
+        nameInput.disabled = isReadOnly; // <<< Disable
+
+        const descTextarea = document.createElement('textarea');
+        descTextarea.value = featTrait.description || '';
+        descTextarea.placeholder = 'Description';
+        descTextarea.className = 'feat-trait-desc';
+        descTextarea.rows = 3;
+        descTextarea.disabled = isReadOnly; // <<< Disable
+        descTextarea.readOnly = isReadOnly; // Also set readOnly for textareas
+
+        itemRowDiv.appendChild(nameInput);
+        itemRowDiv.appendChild(descTextarea);
+
+        // Only add remove button if NOT read-only
+        if (!isReadOnly) {
+            const removeButton = document.createElement('button');
+            removeButton.textContent = 'Remove';
+            removeButton.className = 'remove-item-btn';
+            removeButton.type = 'button';
+            removeButton.onclick = () => {
+                itemRowDiv.remove();
+            };
+            itemRowDiv.appendChild(removeButton);
+        }
+
+        return itemRowDiv;
+    };
+
+    // Populate list
     if (featsAndTraitsArray && Array.isArray(featsAndTraitsArray) && featsAndTraitsArray.length > 0) {
         featsAndTraitsArray.forEach((item) => {
             listContainerDiv.appendChild(createFeatTraitRowElement(item));
         });
     } else {
         const noItemsMsg = document.createElement('p');
-        noItemsMsg.textContent = "No feats or traits defined. Click 'Add New' to start.";
+        noItemsMsg.textContent = isReadOnly ? "No feats or traits defined." : "No feats or traits defined. Click 'Add New' to start.";
         listContainerDiv.appendChild(noItemsMsg);
     }
     modalFeatsContent.appendChild(listContainerDiv);
 
-    // "Add New Feat/Trait" button
-    const addButton = document.createElement('button');
-    addButton.textContent = 'Add New Feat/Trait';
-    addButton.type = 'button';
-    addButton.id = 'add-feat-trait-btn'; // Use the new ID for the add button
-    addButton.onclick = () => {
-        const noItemsMessageElement = listContainerDiv.querySelector('p');
-        if (noItemsMessageElement && noItemsMessageElement.textContent.startsWith("No feats")) {
-            noItemsMessageElement.remove(); // Remove the 'No items' message
-        }
+    // Only show "Add New" button if NOT read-only
+    const existingAddButton = document.getElementById('add-feat-trait-btn');
+    if(existingAddButton) existingAddButton.remove(); // Remove old one
 
-        const newItemRow = createFeatTraitRowElement(); // Creates a blank item row
-        listContainerDiv.appendChild(newItemRow);
-        const newNameInput = newItemRow.querySelector('.feat-trait-name');
-        if (newNameInput) {
-            newNameInput.focus(); // Focus the name field of the new row
-        }
-    };
-    modalFeatsContent.appendChild(addButton); // Add button after the list
+    if (!isReadOnly) {
+        const addButton = document.createElement('button');
+        addButton.textContent = 'Add New Feat/Trait';
+        addButton.type = 'button';
+        addButton.id = 'add-feat-trait-btn';
+        addButton.onclick = () => {
+            const noItemsMessageElement = listContainerDiv.querySelector('p');
+            if (noItemsMessageElement) noItemsMessageElement.remove();
+            const newItemRow = createFeatTraitRowElement(); // isReadOnly will be false here
+            listContainerDiv.appendChild(newItemRow);
+            newItemRow.querySelector('.feat-trait-name')?.focus();
+        };
+        modalFeatsContent.appendChild(addButton);
+    }
 
-    if (saveFeatsButton) saveFeatsButton.style.display = 'inline-block'; // Ensure save button is visible
+    // Hide Save Button in Read-Only Mode
+    if (saveFeatsButton) {
+        saveFeatsButton.style.display = isReadOnly ? 'none' : 'inline-block';
+    }
 }
 // Save Feats & Traits Button Listener
 if (saveFeatsButton) {
@@ -1402,81 +1550,122 @@ function createAttackRowElement(attack = {}) {
 }
 
 // Function to populate the Attacks modal content
-function populateAttacksModal(attacksArray) {
+function populateAttacksModal(attacksArray, isReadOnly = false) {
     if (!modalAttacksContent) return;
     modalAttacksContent.innerHTML = ''; // Clear
+
+    // --- Add Title indication ---
+    const titleH2 = attacksModal.querySelector('h2');
+    if(titleH2) {
+        // Fetching player name might require passing sheetData
+        titleH2.textContent = isReadOnly ? `Viewing Attacks (Read-Only)` : "Attacks & Spellcasting Actions";
+    }
+    // --- End Title ---
 
     const listContainerDiv = document.createElement('div');
     listContainerDiv.id = 'attacks-list-display';
 
+    // Modified row creation function (internal)
+    const createAttackRowElement = (attack = {}) => { // isReadOnly available via closure
+        const itemRowDiv = document.createElement('div');
+        itemRowDiv.className = 'attack-row';
+
+        const nameInput = document.createElement('input');
+        nameInput.type = 'text';
+        nameInput.value = attack.name || '';
+        nameInput.placeholder = "Attack Name";
+        nameInput.className = 'attack-name';
+        nameInput.disabled = isReadOnly; // <<< Disable
+
+        const bonusInput = document.createElement('input');
+        bonusInput.type = 'text';
+        bonusInput.value = attack.attackBonus || '+0';
+        bonusInput.placeholder = "Atk Bonus";
+        bonusInput.className = 'attack-bonus';
+        bonusInput.disabled = isReadOnly; // <<< Disable
+
+        const damageInput = document.createElement('input');
+        damageInput.type = 'text';
+        damageInput.value = attack.damage || '';
+        damageInput.placeholder = "Damage";
+        damageInput.className = 'attack-damage';
+        damageInput.disabled = isReadOnly; // <<< Disable
+
+        const typeInput = document.createElement('input');
+        typeInput.type = 'text';
+        typeInput.value = attack.damageType || '';
+        typeInput.placeholder = "Type";
+        typeInput.className = 'attack-type';
+        typeInput.disabled = isReadOnly; // <<< Disable
+
+        itemRowDiv.appendChild(nameInput);
+        itemRowDiv.appendChild(bonusInput);
+        itemRowDiv.appendChild(damageInput);
+        itemRowDiv.appendChild(typeInput);
+
+        // Only add Attack and Remove buttons if NOT read-only
+        if (!isReadOnly) {
+            const attackButton = document.createElement('button');
+            attackButton.textContent = 'Attack';
+            attackButton.className = 'attack-roll-btn';
+            attackButton.type = 'button';
+            attackButton.onclick = () => {
+                handleAttackRoll(nameInput.value, bonusInput.value, damageInput.value);
+            };
+            itemRowDiv.appendChild(attackButton);
+
+            const removeButton = document.createElement('button');
+            removeButton.textContent = 'Remove';
+            removeButton.className = 'remove-item-btn';
+            removeButton.type = 'button';
+            removeButton.onclick = () => {
+                itemRowDiv.remove();
+            };
+            itemRowDiv.appendChild(removeButton);
+        } else {
+            // Add placeholders or empty divs to maintain layout if needed
+            const buttonPlaceholder = document.createElement('div');
+            buttonPlaceholder.style.width = '100px'; // Adjust width approx to buttons
+            buttonPlaceholder.style.display = 'inline-block'; // Maintain flow somewhat
+             itemRowDiv.appendChild(buttonPlaceholder.cloneNode()); // Placeholder for attack btn
+             itemRowDiv.appendChild(buttonPlaceholder.cloneNode()); // Placeholder for remove btn
+        }
+
+        return itemRowDiv;
+    };
+
+    // Populate list
     if (attacksArray && Array.isArray(attacksArray) && attacksArray.length > 0) {
         attacksArray.forEach((item) => {
             listContainerDiv.appendChild(createAttackRowElement(item));
         });
     } else {
-        listContainerDiv.innerHTML = "<p>No attacks defined. Click 'Add New Attack' to start.</p>";
+        listContainerDiv.innerHTML = `<p>${isReadOnly ? 'No attacks defined.' : "No attacks defined. Click 'Add New Attack' to start."}</p>`;
     }
     modalAttacksContent.appendChild(listContainerDiv);
 
-    // "Add New Attack" button
-    const addButton = document.createElement('button');
-    addButton.textContent = 'Add New Attack';
-    addButton.type = 'button';
-    addButton.id = 'add-attack-btn'; // Use the new ID
-    addButton.onclick = () => {
-        const noItemsMsg = listContainerDiv.querySelector('p');
-        if (noItemsMsg) noItemsMsg.remove();
+    // Only show "Add New" button if NOT read-only
+    const existingAddButton = document.getElementById('add-attack-btn');
+    if(existingAddButton) existingAddButton.remove(); // Remove old one
 
-        const newItemRow = createAttackRowElement();
-        listContainerDiv.appendChild(newItemRow);
-        newItemRow.querySelector('.attack-name')?.focus(); // Optional chaining
-    };
-    modalAttacksContent.appendChild(addButton);
-
-    if (saveAttacksButton) saveAttacksButton.style.display = 'inline-block';
-}
-// Function to handle the attack and damage rolls when the button is clicked
-function handleAttackRoll(attackName, attackBonusStr, damageStr) {
-    if (!currentCharacterSheet) {
-        addMessageToChat("Error: Character sheet not loaded.");
-        return;
+    if (!isReadOnly) {
+        const addButton = document.createElement('button');
+        addButton.textContent = 'Add New Attack';
+        addButton.type = 'button';
+        addButton.id = 'add-attack-btn';
+        addButton.onclick = () => {
+             const noItemsMsg = listContainerDiv.querySelector('p');
+             if (noItemsMsg) noItemsMsg.remove();
+             const newItemRow = createAttackRowElement(); // isReadOnly is false here
+             listContainerDiv.appendChild(newItemRow);
+             newItemRow.querySelector('.attack-name')?.focus();
+        };
+        modalAttacksContent.appendChild(addButton);
     }
-    const rollerName = getPlayerName();
-    attackName = attackName || "Attack"; // Default name if empty
 
-    // --- Attack Roll ---
-    // Basic parsing: assumes format like "+5" or "-1" or just "5"
-    // More complex parsing ("+Str+Prof") would require sheet data here.
-    let atkBonusValue = 0;
-    const bonusMatch = attackBonusStr.match(/[+-]?\d+/); // Find first number with optional sign
-    if (bonusMatch) {
-        atkBonusValue = parseInt(bonusMatch[0], 10);
-    }
-    // Ensure bonus is formatted correctly for the dice roller ("+5", "-1", "")
-    const atkBonusStringForRoll = atkBonusValue === 0 ? "" : (atkBonusValue > 0 ? `+${atkBonusValue}` : `${atkBonusValue}`);
-    const attackRollString = `1d20${atkBonusStringForRoll}`;
-
-    socket.emit('dice roll', {
-        rollerName: rollerName,
-        rollString: attackRollString,
-        description: `${attackName}: Attack Roll (${attackRollString})`
-    });
-
-    // --- Damage Roll ---
-    if (damageStr && damageStr.trim() !== '') {
-        // Basic validation: check if it contains 'd' for dice
-        if (damageStr.includes('d') || damageStr.includes('D')) {
-             socket.emit('dice roll', {
-                rollerName: rollerName,
-                rollString: damageStr.trim(), // Send the raw damage string
-                description: `${attackName}: Damage Roll (${damageStr.trim()})`
-            });
-        } else {
-            // If it's not a dice string, maybe just announce it?
-            addMessageToChat(`${rollerName} deals ${damageStr} damage with ${attackName}.`);
-        }
-    } else {
-        addMessageToChat(`${attackName} doesn't specify damage.`);
+    // Hide Save Button in Read-Only Mode
+    if (saveAttacksButton) {
+        saveAttacksButton.style.display = isReadOnly ? 'none' : 'inline-block';
     }
 }
 if (saveAttacksButton) {
@@ -1512,30 +1701,53 @@ if (saveAttacksButton) {
 }
 const SPELL_LEVELS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
 
-// Populate the entire Spellcasting modal
-function populateSpellsModal(sheetData) {
+// --- populateSpellsModal (Ensure previous modifications + Read-Only) ---
+// Add isReadOnly parameter
+function populateSpellsModal(sheetData, isReadOnly = false) {
     if (!sheetData || !modalSpellsContent) return;
 
-    // Populate Core Info
-    if (spellClassInput) spellClassInput.value = sheetData.spellcastingClass || '';
-    if (spellAbilitySelect) spellAbilitySelect.value = sheetData.spellcastingAbility || '';
-    if (spellSaveDCInput) spellSaveDCInput.value = sheetData.spellSaveDC || 8;
-    if (spellAttackBonusInput) spellAttackBonusInput.value = sheetData.spellAttackBonus || 0;
+    // --- Add Title indication ---
+    const titleH2 = spellsModal.querySelector('h2');
+    if(titleH2) {
+        titleH2.textContent = isReadOnly ? `Viewing ${sheetData.playerName}'s Spellcasting (Read-Only)` : "Spellcasting";
+    }
+    // --- End Title ---
 
-    // Populate Spell Slots
-    populateSpellSlots(sheetData.spellSlots);
+    // --- Populate Core Info (and disable) ---
+    if (spellClassInput) {
+        spellClassInput.value = sheetData.spellcastingClass || '';
+        spellClassInput.disabled = isReadOnly;
+    }
+    if (spellAbilitySelect) {
+        spellAbilitySelect.value = sheetData.spellcastingAbility || '';
+        spellAbilitySelect.disabled = isReadOnly;
+    }
+    if (spellSaveDCInput) {
+        spellSaveDCInput.value = sheetData.spellSaveDC || 8;
+        spellSaveDCInput.disabled = isReadOnly;
+    }
+    if (spellAttackBonusInput) {
+        spellAttackBonusInput.value = sheetData.spellAttackBonus || 0;
+        spellAttackBonusInput.disabled = isReadOnly;
+    }
 
-    // Populate Spells List with Tabs
-    populateSpellTabsAndLists(sheetData.spells || []);
+    // Populate Spell Slots (and disable inputs)
+    populateSpellSlots(sheetData.spellSlots, isReadOnly); // Pass flag
+
+    // Populate Spells List with Tabs (and disable controls within)
+    populateSpellTabsAndLists(sheetData.spells || [], isReadOnly); // Pass flag
 
     // Activate the first tab (Cantrips) by default
     activateSpellTab(0); // Show level 0 initially
 
-    if (saveSpellsButton) saveSpellsButton.style.display = 'inline-block';
+    // Hide Save Button in Read-Only Mode
+    if (saveSpellsButton) {
+        saveSpellsButton.style.display = isReadOnly ? 'none' : 'inline-block';
+    }
 }
 
-// Populate the Spell Slots grid
-function populateSpellSlots(spellSlotsData = {}) {
+// Modify populateSpellSlots to accept isReadOnly
+function populateSpellSlots(spellSlotsData = {}, isReadOnly = false) {
     if (!spellSlotsGrid) return;
     // Clear previous slots but keep headers
     spellSlotsGrid.innerHTML = `
@@ -1558,6 +1770,7 @@ function populateSpellSlots(spellSlotsData = {}) {
         totalInput.value = levelData.total || 0;
         totalInput.dataset.level = level;
         totalInput.dataset.type = 'total';
+        totalInput.disabled = isReadOnly; // <<< Disable
 
         const expendedInput = document.createElement('input');
         expendedInput.type = 'number';
@@ -1566,28 +1779,31 @@ function populateSpellSlots(spellSlotsData = {}) {
         expendedInput.value = levelData.expended || 0;
         expendedInput.dataset.level = level;
         expendedInput.dataset.type = 'expended';
-        // Optional: Add listener to prevent expended > total
-        expendedInput.addEventListener('input', (e) => {
-             const currentTotal = parseInt(document.getElementById(`spellSlotsTotal-${level}`)?.value || '0', 10);
-             if (parseInt(e.target.value, 10) > currentTotal) {
-                 e.target.value = currentTotal;
-             }
-             if (parseInt(e.target.value, 10) < 0) {
-                  e.target.value = 0;
-             }
-        });
-         totalInput.addEventListener('input', (e)=>{ // Also update expended if total decreases below it
-             const currentExpendedInput = document.getElementById(`spellSlotsExpended-${level}`);
-             const currentExpended = parseInt(currentExpendedInput?.value || '0', 10);
-             const newTotal = parseInt(e.target.value, 10);
-              if (currentExpended > newTotal) {
-                 currentExpendedInput.value = newTotal >= 0 ? newTotal : 0;
-             }
-              if (newTotal < 0) {
-                  e.target.value = 0;
-              }
-         });
+        expendedInput.disabled = isReadOnly; // <<< Disable
 
+        // Keep listeners if not read-only
+        if (!isReadOnly) {
+            expendedInput.addEventListener('input', (e) => {
+                 const currentTotal = parseInt(document.getElementById(`spellSlotsTotal-${level}`)?.value || '0', 10);
+                 if (!isNaN(currentTotal) && parseInt(e.target.value, 10) > currentTotal) {
+                     e.target.value = currentTotal;
+                 }
+                 if (parseInt(e.target.value, 10) < 0) {
+                      e.target.value = 0;
+                 }
+            });
+             totalInput.addEventListener('input', (e)=>{
+                 const currentExpendedInput = document.getElementById(`spellSlotsExpended-${level}`);
+                 const currentExpended = parseInt(currentExpendedInput?.value || '0', 10);
+                 const newTotal = parseInt(e.target.value, 10);
+                  if (!isNaN(currentExpended) && !isNaN(newTotal) && currentExpended > newTotal) {
+                     currentExpendedInput.value = newTotal >= 0 ? newTotal : 0;
+                 }
+                  if (!isNaN(newTotal) && newTotal < 0) {
+                      e.target.value = 0;
+                  }
+             });
+         }
 
         spellSlotsGrid.appendChild(levelLabel);
         spellSlotsGrid.appendChild(totalInput);
@@ -1595,15 +1811,15 @@ function populateSpellSlots(spellSlotsData = {}) {
     }
 }
 
-// Populate Spell Tabs and their initial List containers
-function populateSpellTabsAndLists(spellsArray = []) {
+// Modify populateSpellTabsAndLists to pass isReadOnly down
+function populateSpellTabsAndLists(spellsArray = [], isReadOnly = false) {
     if (!spellTabsContainer || !spellTabContentContainer) return;
 
     spellTabsContainer.innerHTML = '';
     spellTabContentContainer.innerHTML = '';
 
     SPELL_LEVELS.forEach(level => {
-        // Create Tab Button
+        // Create Tab Button (no changes needed)
         const tabButton = document.createElement('button');
         tabButton.className = 'spell-tab-button';
         tabButton.textContent = level === 0 ? 'Cantrips' : `Level ${level}`;
@@ -1611,34 +1827,36 @@ function populateSpellTabsAndLists(spellsArray = []) {
         tabButton.onclick = () => activateSpellTab(level);
         spellTabsContainer.appendChild(tabButton);
 
-        // Create Tab Content Pane
+        // Create Tab Content Pane (no changes needed)
         const tabPane = document.createElement('div');
         tabPane.className = 'spell-tab-pane';
         tabPane.id = `spell-tab-pane-${level}`;
         tabPane.dataset.level = level;
 
-        // Create List Container inside Pane
+        // Create List Container inside Pane (no changes needed)
         const listContainer = document.createElement('div');
         listContainer.className = 'spells-list-level';
         listContainer.id = `spells-list-level-${level}`;
-        listContainer.innerHTML = '<p>No spells defined for this level.</p>'; // Placeholder
+        listContainer.innerHTML = `<p>${isReadOnly ? 'No spells known/prepared for this level.' : 'No spells defined for this level.'}</p>`; // Adjusted placeholder
         tabPane.appendChild(listContainer);
 
         spellTabContentContainer.appendChild(tabPane);
     });
 
-    // Now distribute existing spells into the correct lists
+    // Distribute existing spells into the correct lists using the modified row creator
     spellsArray.forEach(spell => {
         const listContainer = document.getElementById(`spells-list-level-${spell.level}`);
         if (listContainer) {
             const noSpellsMsg = listContainer.querySelector('p');
-            if (noSpellsMsg) noSpellsMsg.remove(); // Remove placeholder if adding spells
-
-            listContainer.appendChild(createSpellRowElement(spell));
+            if (noSpellsMsg && !listContainer.querySelector('.spell-row')) { // Only remove if it's the only thing there
+                noSpellsMsg.remove();
+            }
+            listContainer.appendChild(createSpellRowElement(spell, isReadOnly)); // <<< Pass flag
         }
     });
-     // Ensure Add Spell button listener is attached (or re-attached)
-     setupAddSpellButton();
+
+    // Ensure Add Spell button listener is attached AND button is hidden if read-only
+    setupAddSpellButton(isReadOnly); // Pass flag
 }
 
 
@@ -1657,11 +1875,11 @@ function activateSpellTab(levelToShow) {
 }
 
 
-// Create DOM Row for a single spell
-function createSpellRowElement(spell = {}) {
+// Modify createSpellRowElement to accept isReadOnly
+function createSpellRowElement(spell = {}, isReadOnly = false) {
     const spellRowDiv = document.createElement('div');
     spellRowDiv.className = 'spell-row';
-    spellRowDiv.dataset.level = spell.level === undefined ? 0 : spell.level; // Store level
+    spellRowDiv.dataset.level = spell.level === undefined ? 0 : spell.level;
 
     // --- Structure using grid areas ---
     const prepArea = document.createElement('div');
@@ -1670,6 +1888,7 @@ function createSpellRowElement(spell = {}) {
     prepCheckbox.type = 'checkbox';
     prepCheckbox.checked = spell.prepared || false;
     prepCheckbox.title = "Prepared";
+    prepCheckbox.disabled = isReadOnly; // <<< Disable
     prepArea.appendChild(prepCheckbox);
 
     const nameArea = document.createElement('div');
@@ -1678,12 +1897,13 @@ function createSpellRowElement(spell = {}) {
     nameInput.type = 'text';
     nameInput.value = spell.name || '';
     nameInput.placeholder = "Spell Name";
+    nameInput.disabled = isReadOnly; // <<< Disable
     nameArea.appendChild(nameInput);
 
     const detailsArea = document.createElement('div');
-    detailsArea.className = 'spell-details-grid'; // Container for details
+    detailsArea.className = 'spell-details-grid';
 
-    // Helper to create detail inputs within the grid
+    // Modified helper to create detail inputs (and disable)
     const createDetailInput = (label, type, value, placeholder, className = '', options = null) => {
         const wrap = document.createElement('div');
         const lbl = document.createElement('label');
@@ -1696,18 +1916,23 @@ function createSpellRowElement(spell = {}) {
                 const optionEl = document.createElement('option');
                 optionEl.value = opt.value;
                 optionEl.textContent = opt.text;
-                if (opt.value == value) optionEl.selected = true; // Use == for type flexibility if needed
+                // Use == for comparing value from sheet (might be number) and option value (string)
+                if (opt.value == value) optionEl.selected = true;
                 input.appendChild(optionEl);
             });
+            input.disabled = isReadOnly; // <<< Disable Select
         } else if (type === 'textarea') {
              input = document.createElement('textarea');
              input.rows = 3;
              input.value = value || '';
+             input.disabled = isReadOnly; // <<< Disable Textarea
+             input.readOnly = isReadOnly; // Set readOnly too
         } else {
             input = document.createElement('input');
             input.type = type;
             input.value = value || (type === 'number' ? 0 : '');
             if (type === 'number') input.min = 0;
+            input.disabled = isReadOnly; // <<< Disable Input
         }
         input.placeholder = placeholder;
         if (className) input.classList.add(className);
@@ -1715,7 +1940,7 @@ function createSpellRowElement(spell = {}) {
         return wrap;
     };
 
-    // Add detail fields
+    // Add detail fields using the modified creator
     const levelOptions = SPELL_LEVELS.map(l => ({ value: l, text: l === 0 ? 'Cantrip' : `Level ${l}` }));
     detailsArea.appendChild(createDetailInput('Level', 'select', spell.level, 'Lvl', 'spell-level', levelOptions));
     detailsArea.appendChild(createDetailInput('School', 'text', spell.school, 'e.g., Evocation', 'spell-school'));
@@ -1726,29 +1951,33 @@ function createSpellRowElement(spell = {}) {
     detailsArea.appendChild(createDetailInput('Damage/Effect', 'text', spell.damageEffect, 'e.g., 3d6 Fire / Save DC', 'spell-damageEffect'));
     detailsArea.appendChild(createDetailInput('Description', 'textarea', spell.description, 'Spell details...', 'spell-description'));
 
-
+    // Only add Cast and Remove buttons if NOT read-only
     const castButtonArea = document.createElement('div');
     castButtonArea.className = 'spell-cast-button-area';
-    const castButton = document.createElement('button');
-    castButton.textContent = 'Cast';
-    castButton.className = 'cast-spell-btn';
-    castButton.type = 'button';
-    castButton.onclick = () => {
-        handleCastSpell(
-            nameInput.value,
-            detailsArea.querySelector('.spell-level')?.value || 0, // Get level from input
-            detailsArea.querySelector('.spell-damageEffect')?.value || '' // Get damage/effect
-        );
-    };
-    castButtonArea.appendChild(castButton);
+    if (!isReadOnly) {
+        const castButton = document.createElement('button');
+        castButton.textContent = 'Cast';
+        castButton.className = 'cast-spell-btn';
+        castButton.type = 'button';
+        castButton.onclick = () => {
+            handleCastSpell(
+                nameInput.value,
+                detailsArea.querySelector('.spell-level')?.value || 0,
+                detailsArea.querySelector('.spell-damageEffect')?.value || ''
+            );
+        };
+        castButtonArea.appendChild(castButton);
 
-    const removeButton = document.createElement('button');
-    removeButton.textContent = 'Remove';
-    removeButton.className = 'remove-item-btn';
-    removeButton.type = 'button';
-    removeButton.onclick = () => { spellRowDiv.remove(); };
-    castButtonArea.appendChild(removeButton); // Place remove below cast
-
+        const removeButton = document.createElement('button');
+        removeButton.textContent = 'Remove';
+        removeButton.className = 'remove-item-btn';
+        removeButton.type = 'button';
+        removeButton.onclick = () => { spellRowDiv.remove(); };
+        castButtonArea.appendChild(removeButton);
+    } else {
+        // Add placeholder text or leave empty in read-only mode
+         castButtonArea.innerHTML = ' '; // Maintain layout somewhat
+    }
 
     // Append areas to main div
     spellRowDiv.appendChild(prepArea);
@@ -1759,48 +1988,43 @@ function createSpellRowElement(spell = {}) {
     return spellRowDiv;
 }
 
-// Handle "Add New Spell" button click
-function setupAddSpellButton() {
-    if (addSpellButton) {
-         // Remove previous listener to avoid duplicates if called multiple times
-         addSpellButton.replaceWith(addSpellButton.cloneNode(true));
-         // Re-select the button after cloning
-         const newAddSpellButton = document.getElementById('add-spell-btn');
+// Modify setupAddSpellButton to accept isReadOnly and hide button
+function setupAddSpellButton(isReadOnly = false) {
+    const currentAddButton = document.getElementById('add-spell-btn'); // Find existing button
+    if (currentAddButton) {
+        // Always remove previous listener by cloning if not read-only
+        const newAddSpellButton = currentAddButton.cloneNode(true);
+        currentAddButton.parentNode.replaceChild(newAddSpellButton, currentAddButton);
 
-        newAddSpellButton.onclick = () => {
-            // Find the currently active tab pane
-            const activePane = spellTabContentContainer.querySelector('.spell-tab-pane.active');
-            if (!activePane) {
-                console.warn("No active spell tab found to add spell to.");
-                activateSpellTab(0); // Default to cantrips if none active
-                 const defaultPane = spellTabContentContainer.querySelector('#spell-tab-pane-0');
-                 if(defaultPane) {
-                    const listContainer = defaultPane.querySelector('.spells-list-level');
+        if (isReadOnly) {
+            newAddSpellButton.style.display = 'none'; // Hide if read-only
+        } else {
+            newAddSpellButton.style.display = 'inline-block'; // Ensure visible otherwise
+            newAddSpellButton.onclick = () => {
+                 const activePane = spellTabContentContainer.querySelector('.spell-tab-pane.active');
+                 let targetPane = activePane;
+                 if (!activePane) {
+                     console.warn("No active spell tab found to add spell to.");
+                     activateSpellTab(0);
+                     targetPane = spellTabContentContainer.querySelector('#spell-tab-pane-0');
+                 }
+
+                 if(targetPane) {
+                    const listContainer = targetPane.querySelector('.spells-list-level');
                     if(listContainer){
                         const noSpellsMsg = listContainer.querySelector('p');
-                        if (noSpellsMsg) noSpellsMsg.remove();
-                        const defaultLevel = 0;
-                        const newSpellRow = createSpellRowElement({ level: defaultLevel }); // Set default level
+                        if (noSpellsMsg && !listContainer.querySelector('.spell-row')) noSpellsMsg.remove(); // Remove placeholder only if list is empty
+                        const currentLevel = parseInt(targetPane.dataset.level || '0', 10);
+                        // Create row using the modified function (passing false for isReadOnly here)
+                        const newSpellRow = createSpellRowElement({ level: currentLevel }, false);
                         listContainer.appendChild(newSpellRow);
                         newSpellRow.querySelector('.spell-name input')?.focus();
                     }
                  }
-                return;
-            }
-             const listContainer = activePane.querySelector('.spells-list-level');
-             if(listContainer){
-                 const noSpellsMsg = listContainer.querySelector('p');
-                 if (noSpellsMsg) noSpellsMsg.remove();
-
-                 const currentLevel = parseInt(activePane.dataset.level || '0', 10);
-                 const newSpellRow = createSpellRowElement({ level: currentLevel }); // Default to current tab's level
-                 listContainer.appendChild(newSpellRow);
-                 newSpellRow.querySelector('.spell-name input')?.focus();
-             }
-        };
+            };
+        }
     }
 }
-
 
 // Handle "Cast" button click
 function handleCastSpell(spellName, spellLevel, damageEffectStr) {
@@ -2005,4 +2229,33 @@ if (quickSpellAttackButton) {
 }
 if (quickDamageButton) {
     quickDamageButton.addEventListener('click', handleQuickDamage);
+}
+function openSheetForViewing(username) {
+    const sheetToView = allCharacterSheets[username];
+    if (!sheetToView) {
+        addMessageToChat(`Error: Could not find sheet data for ${username}.`);
+        return;
+    }
+
+    // --- Open Modals Using Populate Functions with Read-Only Flag ---
+
+    // 1. Character Sheet Modal
+    populateSheetModal(sheetToView, true);
+    sheetModal.style.display = 'block';
+
+    // 2. Inventory Modal
+    populateInventoryModal(sheetToView.inventory || [], sheetToView, true);
+    inventoryModal.style.display = 'block'; // Open inventory modal too
+
+    // 3. Feats & Traits Modal
+    populateFeatsModal(sheetToView.featsAndTraits || [], true);
+    featsModal.style.display = 'block'; // Open feats modal too
+
+    // 4. Attacks Modal
+    populateAttacksModal(sheetToView.attacks || [], true);
+    attacksModal.style.display = 'block'; // Open attacks modal too
+
+    // 5. Spellcasting Modal
+    populateSpellsModal(sheetToView, true);
+    spellsModal.style.display = 'block'; // Open spells modal too
 }
