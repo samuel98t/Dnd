@@ -1,6 +1,6 @@
 // Connect to server , socket will be our individual connection
 const socket = io();
-
+let currentUserIsDM = false;
 let currentAuthenticatedUsername = null;
 let currentCharacterSheet = null; // To store the user's sheet
 // --- GET AUTH ELEMENTS ---
@@ -14,12 +14,16 @@ const registerButton = document.getElementById('registerButton');
 const authErrorDisplay = document.getElementById('authError');
 // Get App Elements
 const playerNameInput = document.getElementById('playerName');
-const RollD20Button = document.getElementById('rollD20');
 const rollResultDisplay = document.getElementById('rollResult');
 const chatMessagesDiv = document.getElementById('chat-messages');
 const chatInput = document.getElementById('chatInput');
 const sendChatButton = document.getElementById('sendChat');
-const appContainer = document.getElementById('app-container')
+const appContainer = document.getElementById('app-container');
+// NEW DM Tool Elements
+const dmToolsSection = document.getElementById('dm-tools-section');
+const dmSecretDiceInput = document.getElementById('dmSecretDiceInput');
+const dmSecretDescriptionInput = document.getElementById('dmSecretDescriptionInput');
+const dmSecretRollButton = document.getElementById('dmSecretRollButton');
 // Get MODAL ELEMENTS 
 const sheetModal = document.getElementById('sheetModal');
 const openSheetButton = document.getElementById('openSheetButton');
@@ -42,6 +46,13 @@ const SAVING_THROW_ABILITY_MAP = {
     savingWisdomProficient: 'wisdom',
     savingCharismaProficient: 'charisma',
 };
+// Dice Roller Elements
+const customDiceInput = document.getElementById('customDiceInput');
+const customRollButton = document.getElementById('customRollButton');
+const abilityChecksSection = document.getElementById('ability-checks-section');
+const savingThrowsSection = document.getElementById('saving-throws-section');
+const skillCheckSelect = document.getElementById('skillCheckSelect');
+const rollSkillCheckButton = document.getElementById('rollSkillCheckButton');
 // Skills
 const SKILLS = [
     { key: 'skillAthleticsProficient', label: 'Athletics', ability: 'strength' },
@@ -98,11 +109,14 @@ socket.on('chat history',(history)=>{
 });
 
 // Basic chat implement.
-function addMessageToChat(message){
+function addMessageToChat(message, className = "") {
     const msgElement = document.createElement('p');
     msgElement.textContent = message;
+    if (className) {
+        msgElement.classList.add(className);
+    }
     chatMessagesDiv.appendChild(msgElement);
-    chatMessagesDiv.scrollTop = chatMessagesDiv.scrollHeight; // Autoscroll
+    chatMessagesDiv.scrollTop = chatMessagesDiv.scrollHeight;
 }
 
 sendChatButton.addEventListener('click',()=>{
@@ -147,29 +161,114 @@ function getPlayerName(){
     return currentAuthenticatedUsername || playerNameInput.value.trim() || `Player ${socket.id.substring(0,5)}`;
 }
 
-// Dice Roll 
-RollD20Button.addEventListener('click',() =>{
-    const rollerName = getPlayerName();
-    const rollType = "1d20" // ill make it more dynamic later
-    // Send to server
-    console.log(`Emitting 'dice roll' event :${rollerName} rolls ${rollType}`);
-    // Roll data
-    socket.emit('dice roll',{
-        rollerName: rollerName,
-        rollString: rollType,
-    });
-});
 
 // Listen to roll results from the server
-socket.on('roll result',(data)=>{
-    console.log(`Recieved 'roll result' event`,data);
-    const message = `${data.rollerName} rolled ${data.rollString}: ${data.result}`;
-    addMessageToChat(message);// Display in chat
-    rollResultDisplay.textContent = `Last roll: ${data.rollerName} got ${data.result}`; // Update general display
+socket.on('roll result', (data) => { // data may now include .isSecret
+    console.log(`Received 'roll result' event`, data);
+
+    let detailedRollString = "";
+    if (data.rolls.length > 1) {
+        detailedRollString = `[${data.rolls.join(', ')}]`;
+    } else {
+        detailedRollString = `${data.rolls[0]}`;
+    }
+
+    let fullCalculation = detailedRollString;
+    if (data.modifier) {
+        fullCalculation += ` ${data.modifier}`;
+    }
+    if (data.modifier || data.rolls.length > 1 || (data.rolls.length === 1 && data.rolls[0] !== data.result)) {
+        fullCalculation += ` = ${data.result}`;
+    } else if (data.rolls.length === 1 && data.rolls[0] === data.result && !data.modifier) {
+         // If 1d20, no mod, and roll is the result, just show result or roll.
+         // The fullCalculation is already just the roll, which is the result.
+         // Let's ensure the result is shown if different from single roll due to complex server logic later
+         // For now, this branch means fullCalculation is just data.rolls[0]
+    }
+
+
+    let messagePrefix = data.rollerName;
+    if (data.isSecret && currentUserIsDM) { // Check currentUserIsDM to be sure
+        messagePrefix = `(Secret Roll by DM)`;
+    }
+
+    const chatMessageText = `${messagePrefix} rolled ${data.description || data.rollString}: ${fullCalculation}`;
+    
+    // Add to chat with specific styling for DM secret rolls
+    if (data.isSecret) {
+        if (currentUserIsDM) { // Only DM sees their secret roll in chat
+            addMessageToChat(chatMessageText, "dm-roll-secret");
+        }
+        // Non-DMs do not see this message as it's only sent to the DM socket.
+    } else {
+        addMessageToChat(chatMessageText); // Public roll
+    }
+
+    // Update the "Last Roll" display. For secret rolls, only DM sees it.
+    if (!data.isSecret || (data.isSecret && currentUserIsDM)) {
+        const displayDescription = data.description ? data.description.split(" (")[0] : data.rollString;
+        let lastRollPrefix = data.rollerName;
+        if (data.isSecret) lastRollPrefix = "(DM Secret)";
+        
+        rollResultDisplay.textContent = `Last roll: ${lastRollPrefix} - ${displayDescription}: ${data.result} (Rolls: ${data.rolls.join(', ')})`;
+    } else if (data.isSecret && !currentUserIsDM) {
+        // If it's a secret roll and this client is not the DM,
+        // don't update their "Last Roll" display with it.
+        // (This case shouldn't happen if server logic is correct, as event isn't sent)
+    }
 });
 
-// Placeholder for Character Sheet
-// Add listeners to emit changes to server later
+
+
+function handleSpecificRoll(rollTitle, baseAbilityKey, proficiencyFieldKey = null, rollType = "1d20") { // Added rollType
+    if (!currentCharacterSheet) {
+        addMessageToChat("Error: Character sheet not loaded. Cannot perform roll.");
+        return;
+    }
+    const rollerName = getPlayerName();
+
+    const abilityScore = parseInt(currentCharacterSheet[baseAbilityKey], 10);
+    if (isNaN(abilityScore)) {
+        addMessageToChat(`Error: ${baseAbilityKey} score not found or invalid.`);
+        return;
+    }
+    const abilityModifierValue = parseInt(calculateModifier(abilityScore)); // numeric value
+
+    let totalModifierValue = abilityModifierValue;
+    let proficiencyBonusAdded = false;
+    let pbValue = 0;
+
+    if (proficiencyFieldKey) {
+        const isProficient = currentCharacterSheet[proficiencyFieldKey];
+        if (isProficient) {
+            pbValue = getProficiencyBonusValue();
+            totalModifierValue += pbValue;
+            proficiencyBonusAdded = true;
+        }
+    }
+
+    const modifierString = totalModifierValue !== 0 ? `${totalModifierValue >= 0 ? '+' : ''}${totalModifierValue}` : "";
+    const diceStringForServer = `${rollType}${modifierString}`; // e.g., "1d20+5" or "2d20+5"
+
+    // Construct a more detailed description for the client
+    let description = `${rollTitle} (${rollType}`;
+    if (abilityModifierValue !== 0) {
+        description += ` ${abilityModifierValue >= 0 ? '+' : ''}${abilityModifierValue}`;
+    }
+    if (proficiencyBonusAdded && pbValue !== 0) {
+        description += ` ${pbValue >= 0 ? '+' : ''}${pbValue}`;
+    }
+    description += `)`; // The server will append the actual calculation
+
+
+    socket.emit('dice roll', {
+        rollerName: rollerName,
+        rollString: diceStringForServer,
+        description: description
+    });
+}
+
+
 
 // Inital message
 addMessageToChat('Welcome! Connecting to server...');
@@ -205,17 +304,26 @@ socket.on('auth success', (authData) => {
     console.log('Auth Success:', authData);
     currentAuthenticatedUsername = authData.username;
     currentCharacterSheet = authData.sheet;
+    currentUserIsDM = authData.isDM || false; // Store DM status
 
-    // Update UI
     if (authArea) authArea.style.display = 'none';
-    if (appContainer) appContainer.style.display = ''; 
+    if (appContainer) appContainer.style.display = '';
 
     if (playerNameInput) {
         playerNameInput.value = currentAuthenticatedUsername;
     }
-
     addMessageToChat(`Logged in as ${currentAuthenticatedUsername}. Welcome!`);
-    authErrorDisplay.textContent = ''; // Clear any auth errors
+    authErrorDisplay.textContent = '';
+
+    populateDiceRollerControls();
+
+    // Show DM tools if user is DM
+    if (currentUserIsDM && dmToolsSection) {
+        dmToolsSection.style.display = 'block';
+        addMessageToChat("DM Tools Unlocked.", "dm-message"); // Special class for DM messages
+    } else if (dmToolsSection) {
+        dmToolsSection.style.display = 'none';
+    }
 });
 
 // Listen for auth error
@@ -742,3 +850,174 @@ function updateAllModalBonuses() {
         }
     });
 }
+function populateDiceRollerControls() {
+    // Ability Checks
+    abilityChecksSection.innerHTML = '<h4>Ability Checks (1d20 + Mod)</h4>'; // Clear and re-add header
+    ABILITIES_KEYS.forEach(abilityKey => {
+        const btn = document.createElement('button');
+        btn.textContent = `${abilityKey.charAt(0).toUpperCase() + abilityKey.slice(1)} Check`;
+        btn.dataset.ability = abilityKey;
+        btn.addEventListener('click', () => handleSpecificRoll(
+            `${abilityKey.charAt(0).toUpperCase() + abilityKey.slice(1)} Check`,
+            abilityKey
+        ));
+        abilityChecksSection.appendChild(btn);
+    });
+
+    // Saving Throws
+    savingThrowsSection.innerHTML = '<h4>Saving Throws (1d20 + Mod [+ PB if proficient])</h4>';
+    for (const stFieldKey in SAVING_THROW_ABILITY_MAP) {
+        const abilityKey = SAVING_THROW_ABILITY_MAP[stFieldKey];
+        const btn = document.createElement('button');
+        btn.textContent = `${abilityKey.charAt(0).toUpperCase() + abilityKey.slice(1)} Save`;
+        btn.dataset.ability = abilityKey;
+        btn.dataset.stField = stFieldKey;
+        btn.addEventListener('click', () => handleSpecificRoll(
+            `${abilityKey.charAt(0).toUpperCase() + abilityKey.slice(1)} Saving Throw`,
+            abilityKey,
+            stFieldKey // This is the proficiency field key, e.g., 'savingStrengthProficient'
+        ));
+        savingThrowsSection.appendChild(btn);
+    }
+
+    // Skill Checks
+    skillCheckSelect.innerHTML = '<option value="">-- Select Skill --</option>'; // Clear and re-add default
+    SKILLS.forEach(skill => {
+        const option = document.createElement('option');
+        option.value = skill.key; // e.g., 'skillAthleticsProficient'
+        option.textContent = `${skill.label} (${skill.ability.substring(0,3).toUpperCase()})`;
+        skillCheckSelect.appendChild(option);
+    });
+}
+
+
+// --- Roll Handling ---
+function handleSpecificRoll(rollTitle, baseAbilityKey, proficiencyFieldKey = null, rollType = "1d20") {
+    if (!currentCharacterSheet) {
+        addMessageToChat("Error: Character sheet not loaded. Cannot perform roll.");
+        return;
+    }
+    const rollerName = getPlayerName();
+
+    const abilityScore = parseInt(currentCharacterSheet[baseAbilityKey], 10);
+    if (isNaN(abilityScore)) {
+        addMessageToChat(`Error: ${baseAbilityKey} score not found or invalid.`);
+        return;
+    }
+    const abilityModifierValue = parseInt(calculateModifier(abilityScore));
+
+    let totalModifierValue = abilityModifierValue;
+    let proficiencyBonusAdded = false;
+    let pbValue = 0;
+
+    if (proficiencyFieldKey) {
+        const isProficient = currentCharacterSheet[proficiencyFieldKey];
+        if (isProficient) {
+            pbValue = getProficiencyBonusValue();
+            totalModifierValue += pbValue;
+            proficiencyBonusAdded = true;
+        }
+    }
+
+    const modifierStringForServer = totalModifierValue !== 0 ? `${totalModifierValue >= 0 ? '+' : ''}${totalModifierValue}` : "";
+    const diceStringForServer = `${rollType}${modifierStringForServer}`;
+
+    // Refined Description: Focus on the "why"
+    let description = `${rollTitle} (Base: ${rollType}`; // e.g. "Strength Check (Base: 1d20"
+    if (abilityModifierValue !== 0) {
+        description += ` ${abilityModifierValue >= 0 ? '+' : ''}${abilityModifierValue}[${baseAbilityKey.substring(0,3)}]`;
+    }
+    if (proficiencyBonusAdded && pbValue !== 0) {
+        description += ` ${pbValue >= 0 ? '+' : ''}${pbValue}[PB]`;
+    }
+    description += `)`; // e.g., "Strength Check (Base: 1d20 -5[Str])"
+                       // or "Initiative (Base: 1d20 +2[Dex] +3[PB])"
+
+    socket.emit('dice roll', {
+        rollerName: rollerName,
+        rollString: diceStringForServer, // This is what server actually rolls, e.g., "1d20-5"
+        description: description         // This explains the components
+    });
+}
+
+// Event Listener for Custom Roll Button
+if (customRollButton) {
+    customRollButton.addEventListener('click', () => {
+        const customString = customDiceInput.value.trim();
+        if (customString) {
+            const rollerName = getPlayerName();
+            socket.emit('dice roll', {
+                rollerName: rollerName,
+                rollString: customString,
+                description: customString // For custom rolls, description is same as roll string
+            });
+            customDiceInput.value = ''; // Clear input
+        } else {
+            addMessageToChat("Please enter a dice string (e.g., 2d6+3).");
+        }
+    });
+}
+// Add enter to send custom roll
+if(customDiceInput) {
+    customDiceInput.addEventListener('keydown', (event) => {
+        if (event.key === "Enter") {
+            customRollButton.click(); // Trigger the button's click handler
+        }
+    });
+}
+
+
+// Event Listener for Skill Check Button
+if (rollSkillCheckButton) {
+    rollSkillCheckButton.addEventListener('click', () => {
+        const selectedSkillKey = skillCheckSelect.value; // This is the proficiency field key like 'skillAthleticsProficient'
+        if (!selectedSkillKey) {
+            addMessageToChat("Please select a skill to roll.");
+            return;
+        }
+        const skillInfo = SKILLS.find(s => s.key === selectedSkillKey);
+        if (skillInfo) {
+            handleSpecificRoll(
+                `${skillInfo.label} (${skillInfo.ability.substring(0,3).toUpperCase()}) Check`,
+                skillInfo.ability,
+                selectedSkillKey // Proficiency field key
+            );
+        }
+    });
+}
+
+// --- DM Secret Roll Button Listener ---
+if (dmSecretRollButton) {
+    dmSecretRollButton.addEventListener('click', () => {
+        if (!currentUserIsDM) return; // Should not happen if UI is hidden, but good check
+
+        const diceString = dmSecretDiceInput.value.trim();
+        const description = dmSecretDescriptionInput.value.trim();
+
+        if (diceString) {
+            socket.emit('dm secret roll', {
+                rollString: diceString,
+                description: description || diceString // Use description or fallback to roll string
+            });
+            dmSecretDiceInput.value = '';
+            dmSecretDescriptionInput.value = '';
+        } else {
+            addMessageToChat("Please enter a dice string for the secret roll.", "dm-error");
+        }
+    });
+}
+if (dmSecretDiceInput) {
+    dmSecretDiceInput.addEventListener('keydown', (event) => {
+        if (event.key === "Enter") {
+            dmSecretRollButton.click();
+        }
+    });
+}
+if (dmSecretDescriptionInput) {
+     dmSecretDescriptionInput.addEventListener('keydown', (event) => {
+        if (event.key === "Enter") {
+            dmSecretRollButton.click();
+        }
+    });
+}
+

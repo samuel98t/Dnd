@@ -323,3 +323,96 @@ button:hover {
     padding-left: 5px; /* Space before bonus */
     flex-shrink: 0;
 }
+#dice-roll-area h4 {
+    margin-top: 15px;
+    margin-bottom: 8px;
+    color: #444;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 3px;
+}
+
+#dice-roll-area div[id$="-section"] { /* Target divs ending with -section */
+    margin-bottom: 15px;
+}
+
+#dice-roll-area button {
+    margin-right: 5px;
+    margin-bottom: 5px;
+    padding: 6px 10px; /* Slightly smaller buttons for dice area */
+    font-size: 0.9em;
+}
+
+#customDiceInput {
+    width: calc(100% - 125px); /* Adjust based on button width */
+    margin-right: 5px;
+    display: inline-block; /* For alignment with button */
+    vertical-align: middle;
+}
+#customRollButton {
+    width: 110px; /* Fixed width for custom roll button */
+    display: inline-block;
+    vertical-align: middle;
+}
+
+#skillCheckSelect {
+    padding: 7px;
+    border-radius: 4px;
+    border: 1px solid #ccc;
+}
+
+#dice-roll-area p { /* For the "Last Roll" display */
+    margin-top: 15px;
+    font-weight: bold;
+    color: #333;
+}
+#rollResult {
+    font-weight: normal;
+    color: #007bff;
+}
+#dm-tools-section h3, #dm-tools-section h4 {
+    color: #880000; /* Dark red for DM section titles */
+}
+
+#dmSecretDescriptionInput {
+    width: calc(100% - 150px - 130px); /* Adjust based on sibling input and button */
+    margin-right: 5px;
+    display: inline-block;
+    vertical-align: middle;
+}
+
+#dmSecretDiceInput {
+     width: 140px;
+     margin-right: 5px;
+     display: inline-block;
+     vertical-align: middle;
+}
+#dmSecretRollButton {
+    width: 120px;
+    display: inline-block;
+    vertical-align: middle;
+    background-color: #c82333; /* DM-specific button color */
+}
+#dmSecretRollButton:hover {
+    background-color: #aF1d2A;
+}
+
+
+/* Styling for DM messages in chat */
+.dm-message {
+    color: green;
+    font-style: italic;
+    font-weight: bold;
+}
+.dm-error {
+    color: red;
+    font-style: italic;
+    font-weight: bold;
+}
+.dm-roll-secret {
+    color: #551a8b; /* Purple for secret DM rolls */
+    font-style: italic;
+    background-color: #f0e6f6; /* Light purple background */
+    padding: 3px 5px;
+    border-left: 3px solid #551a8b;
+    margin: 2px 0;
+}

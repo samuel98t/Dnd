@@ -6,7 +6,7 @@ const path = require('path');
 const bcrypt = require('bcrypt');
 const mongoose = require('mongoose');
 require('dotenv').config();
-
+const DM_USERNAME = 'dm';
 const app = express();
 const server = http.createServer(app) // Creates HTTP server with Express app.
 const io = socketIO(server) // Attaches Socket.IO to the HTTP server
@@ -116,25 +116,36 @@ function formatSheetsForClient(sheetsArray) {
     }
 
 // Dice roller helper func
-function rollDice(diceString){
-    const match = diceString.match(/(\d+)[dD](\d+)(?:([+-])(\d+))?/); // simple parser
-    if(!match) return null; // Invalid dice format
+function rollDice(diceString) {
+    const match = diceString.match(/(\d+)[dD](\d+)(?:([+-])(\d+))?/);
+    if (!match) return null;
+
     const numDice = parseInt(match[1]);
     const diceSides = parseInt(match[2]);
     const modifierSign = match[3];
     const modifierValue = parseInt(match[4]) || 0;
 
-    let total = 0;
-    for(let i=0; i <numDice; i++){
-        total+= Math.floor(Math.random()*diceSides)+1;
+    let individualRolls = [];
+    let sumOfDice = 0;
+    for (let i = 0; i < numDice; i++) {
+        const roll = Math.floor(Math.random() * diceSides) + 1;
+        individualRolls.push(roll);
+        sumOfDice += roll;
     }
-    if (modifierSign==='+'){
+
+    let total = sumOfDice;
+    if (modifierSign === '+') {
         total += modifierValue;
+    } else if (modifierSign === '-') {
+        total -= modifierValue;
     }
-    else if(modifierSign==='-'){
-        total-=modifierValue;
-    }
-    return total;
+
+    return {
+        total: total,                 // Final result after modifiers
+        rolls: individualRolls,       // Array of individual dice results, e.g., [15, 7]
+        sumOfDice: sumOfDice,         // Sum of dice before modifiers
+        modifier: (modifierSign && modifierValue) ? (modifierSign + modifierValue) : "" // e.g. "+5", "-2", or ""
+    };
 }
 // When a client connects
 io.on('connection',(socket)=>{
@@ -162,7 +173,8 @@ io.on('connection',(socket)=>{
             await newSheet.save(); // Save
             // Add user to active users
             activeUsers[socket.id] = normalizedUsername;
-            socket.emit('auth success',{username:normalizedUsername,sheet: newSheet.toObject()});
+            const isDM = normalizedUsername.toLowerCase() === DM_USERNAME.toLowerCase();
+            socket.emit('auth success',{username:normalizedUsername,sheet: newSheet.toObject(),isDM:isDM});
             socket.emit('chat history', chatHistory);
             io.emit('server message', { text: `${normalizedUsername} has registered and joined.`, type: 'system' });
             // Send all sheets after user joins
@@ -198,13 +210,14 @@ io.on('connection',(socket)=>{
             if(match){
                 activeUsers[socket.id]=normalizedUsername;
                 let sheet = await CharacterSheet.findOne({userId:user._id}).lean();
+                const isDM = normalizedUsername.toLowerCase() === DM_USERNAME.toLowerCase(); // Check if this user is the DM
                 // Realistically should never happen but just incase
                 if(!sheet){
                     sheet = new CharacterSheet({userId:user._id,playerName:normalizedUsername});
                     await sheet.save();
                     sheet = sheet.toObject();
                 }
-                socket.emit('auth success',{username:normalizedUsername,sheet:sheet});
+                socket.emit('auth success',{username:normalizedUsername,sheet:sheet,isDM:isDM});
                 socket.emit('chat history',chatHistory);
                 io.emit('server message',{text:`${normalizedUsername} has logged in `,type:'system'});
                 const allSheets = await CharacterSheet.find().lean();
@@ -304,28 +317,90 @@ io.on('connection',(socket)=>{
         if (chatHistory.length > 50) chatHistory.shift();
     })
     // Dice rolls
-    socket.on('dice roll',(data)=>{
+    socket.on('dice roll', (data) => {
+        // Check if this is a DM trying to make a public roll but accidentally using old UI
+        // Or if this socket is not the DM, proceed as normal.
+        // For now, this handler remains for public rolls.
+
         const username = activeUsers[socket.id];
-        if(!username) return;
-        const serverRollResult = rollDice(data.rollString);
-        if (serverRollResult === null){
-            // Handle invalid/errors
-            socket.emit('roll error',{message:`Invalid dice format: ${data.rollString}`});
+        if (!username) return;
+
+        const rollOutcome = rollDice(data.rollString);
+
+        if (rollOutcome === null) {
+            socket.emit('roll error', { message: `Invalid dice format or calculation error for: ${data.rollString}` });
             return;
         }
-        const rollDataToBroadcast ={
+
+        const rollDataToBroadcast = {
             rollerName: username,
             rollString: data.rollString,
-            result :serverRollResult,
-            timestamp: new Date().toLocaleTimeString()
+            description: data.description,
+            rolls: rollOutcome.rolls,
+            sumOfDice: rollOutcome.sumOfDice,
+            modifier: rollOutcome.modifier,
+            result: rollOutcome.total,
+            timestamp: new Date().toLocaleTimeString(),
+            isSecret: false // Explicitly mark public rolls
         };
-        io.emit('roll result',(rollDataToBroadcast));
-        const chatMessage = `${username} rolled ${rollDataToBroadcast.rollString}: ${rollDataToBroadcast.result}`;
-        chatHistory.push({ type: 'roll', text: chatMessage, timestamp: rollDataToBroadcast.timestamp });
+        io.emit('roll result', (rollDataToBroadcast)); // Broadcast to everyone
+
+        let chatMessageText = `${username} rolled ${data.description || data.rollString}`;
+        chatMessageText += ` => Rolls: [${rollOutcome.rolls.join(', ')}]`;
+        if (rollOutcome.modifier) {
+            chatMessageText += ` ${rollOutcome.modifier}`;
+        }
+        chatMessageText += ` = ${rollOutcome.total}`;
+
+        chatHistory.push({ type: 'roll', text: chatMessageText, timestamp: rollDataToBroadcast.timestamp });
         if (chatHistory.length > LEN) chatHistory.shift();
-        });;
+    });
+        // New Handler for DM's secret roll
+    socket.on('dm secret roll', (data) => {
+        if (!isSocketDM(socket)) {
+            // Optionally send an error back or just ignore
+            console.warn(`Non-DM user ${activeUsers[socket.id]} attempted a secret roll.`);
+            return socket.emit('roll error', { message: 'Only DMs can make secret rolls.' });
+        }
+
+        const username = activeUsers[socket.id]; // Should be the DM
+        const rollOutcome = rollDice(data.rollString);
+
+        if (rollOutcome === null) {
+            return socket.emit('roll error', { message: `Invalid dice format: ${data.rollString}` });
+        }
+
+        // Prepare data to send ONLY to the DM
+        const secretRollData = {
+            rollerName: username, // "DM" or DM's actual username
+            rollString: data.rollString,
+            description: data.description || data.rollString, // Use provided description or fallback
+            rolls: rollOutcome.rolls,
+            sumOfDice: rollOutcome.sumOfDice,
+            modifier: rollOutcome.modifier,
+            result: rollOutcome.total,
+            timestamp: new Date().toLocaleTimeString(),
+            isSecret: true // Flag to indicate it's a secret roll for client-side handling
+        };
+
+        // Emit only to the calling socket (the DM)
+        socket.emit('roll result', secretRollData);
+
+        // Optionally log this roll on the server console for the DM's record
+        console.log(`DM SECRET ROLL by ${username}: ${data.rollString} -> ${JSON.stringify(rollOutcome.rolls)} ${rollOutcome.modifier} = ${rollOutcome.total}`);
+        
+        // Add to a special DM chat history or a general server log not sent to players
+        // For now, we'll just log it to the server console.
+        // You could add it to a separate `dmChatHistory` array and send that to the DM.
+        // Or, the client-side can just add it to its local chat display.
     });
 
+    });
+// Helper function to check if a socket belongs to the DM
+function isSocketDM(socket) {
+    const username = activeUsers[socket.id];
+    return username && username.toLowerCase() === DM_USERNAME.toLowerCase();
+}
 
 
 // Start the server.
