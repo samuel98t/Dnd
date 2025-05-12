@@ -591,3 +591,92 @@ button:hover {
     border-left: 3px solid var(--dm-secret-roll-border);
     margin: 2px 0;
 }
+#featsModal .modal-content {
+    max-width: 650px; /* Adjust width as needed */
+    margin: 5% auto;
+    max-height: 85vh;
+}
+
+/* --- Style the list container, similar to inventory --- */
+#feats-list-display {
+    max-height: 450px; /* Or adjust as needed */
+    overflow-y: auto;
+    border: 1px solid var(--container-border);
+    padding: 10px;
+    margin-bottom: 10px;
+    background-color: var(--inventory-list-bg); /* Reuse inventory list bg */
+    flex-shrink: 1;
+    min-height: 100px;
+}
+
+/* --- Style individual feat/trait rows --- */
+.feat-trait-row {
+    display: flex;
+    flex-wrap: wrap; /* Allow wrapping on smaller screens */
+    gap: 8px;
+    align-items: flex-start; /* Align items to the top */
+    margin-bottom: 10px;
+    padding: 8px;
+    border: 1px solid var(--inventory-row-border); /* Reuse inventory border */
+    border-radius: 4px;
+    background-color: var(--inventory-row-bg); /* Reuse inventory row bg */
+}
+
+.feat-trait-row input[type="text"],
+.feat-trait-row textarea {
+    margin-bottom: 0;
+    padding: 6px;
+    border: 1px solid var(--input-border);
+    border-radius: 3px;
+    background-color: var(--input-bg); /* Ensure inputs match theme */
+    color: var(--text-color);
+    font-family: inherit; /* Ensure textarea uses same font */
+    font-size: 0.95em; /* Match input font size */
+}
+/* Dark mode specific for textarea */
+body.dark-mode .feat-trait-row textarea {
+    background-color: var(--input-bg);
+    color: var(--text-color);
+    border-color: var(--input-border);
+}
+
+
+.feat-trait-name {
+    flex: 1 1 180px; /* Grow, shrink, basis */
+    min-width: 150px;
+}
+
+.feat-trait-desc {
+    flex: 3 1 300px; /* Grow more, basis larger */
+    min-width: 250px;
+    resize: vertical; /* Allow vertical resize */
+}
+
+/* Reuse remove button style */
+.feat-trait-row .remove-item-btn {
+     flex: 0 0 auto; /* Don't grow or shrink */
+     align-self: center; /* Center vertically */
+     /* Styles already defined via .remove-item-btn */
+}
+
+/* Reuse add button style */
+#add-feat-trait-btn {
+    background-color: var(--add-button-bg);
+    color: white;
+    padding: 8px 12px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    margin-top: 5px;
+    align-self: flex-start;
+}
+#add-feat-trait-btn:hover {
+    background-color: var(--add-button-hover-bg);
+}
+
+/* Adjust save button positioning */
+#featsModal #saveFeatsButton {
+    margin-top: auto;
+    padding-top: 15px;
+    align-self: flex-end;
+}

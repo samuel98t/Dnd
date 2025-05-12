@@ -97,6 +97,14 @@ const characterSheetSchema = new mongoose.Schema({
         }],
         default: []
     },
+        // *** NEW: Feats & Traits ***
+    featsAndTraits: {
+        type: [{
+            name: { type: String, required: true, trim: true },
+            description: { type: String, default: '', trim: true }
+        }],
+        default: []
+    },
     lastUpdated:{type:Date,default:Date.now}
 
 });

@@ -38,6 +38,7 @@
                 <p> Player Name: <input type="text" id="playerName" placeholder="Your Name" readonly></p>
                 <button id="openSheetButton">View Character Sheet</button>
                 <button id="openInventoryButton" style="margin-top: 10px;">Manage Inventory</button>
+                <button id="openFeatsButton" style="margin-top: 10px;">Feats & Traits</button>
             </div>
 
             <div id="dice-roll-area">
@@ -131,6 +132,18 @@
             <p>Loading Inventory</p>
             </div>
             <button id="saveInventoryButton" style="margin-top: 15px;">Save Inventory</button>
+        </div>
+    </div>
+        <!-- *** NEW FEATS & TRAITS MODAL *** -->
+    <div id="featsModal" class="modal">
+        <div class="modal-content"> <!-- Reuse modal-content class -->
+            <span class="close-button" id="closeFeatsModal">×</span>
+            <h2>Feats & Traits</h2>
+            <div id="modalFeatsContent">
+                <!-- Feats and traits list will be populated here -->
+                <p>Loading feats & traits...</p>
+            </div>
+            <button id="saveFeatsButton" style="margin-top: 15px;">Save Feats & Traits</button>
         </div>
     </div>
 

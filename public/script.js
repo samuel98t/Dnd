@@ -46,6 +46,13 @@ const SAVING_THROW_ABILITY_MAP = {
     savingWisdomProficient: 'wisdom',
     savingCharismaProficient: 'charisma',
 };
+// Get Feats & Traits Modal Elements
+const openFeatsButton = document.getElementById('openFeatsButton');
+const featsModal = document.getElementById('featsModal');
+const closeFeatsModalButton = document.getElementById('closeFeatsModal');
+const modalFeatsContent = document.getElementById('modalFeatsContent');
+const saveFeatsButton = document.getElementById('saveFeatsButton');
+
 // Dice Roller Elements
 const customDiceInput = document.getElementById('customDiceInput');
 const customRollButton = document.getElementById('customRollButton');
@@ -359,6 +366,9 @@ window.addEventListener('click',(event)=>{
     if (event.target ===inventoryModal){
         inventoryModal.style.display='none';
     }
+    if (event.target === featsModal) {
+        featsModal.style.display = 'none';
+    }
 });
 
 function calculateModifier(score) {
@@ -584,18 +594,27 @@ socket.on('character sheet updated', (data) => {
         if (!currentCharacterSheet) currentCharacterSheet = {};
         // Deep merge might be better if sheet structure is complex, but for flat fields this is fine
         Object.assign(currentCharacterSheet, data.updatedSheet);
-        
+
         addMessageToChat(`Your sheet data has been updated.`);
 
+        // If the main sheet modal is open, refresh it
         if (sheetModal.style.display === 'block') {
-            populateSheetModal(currentCharacterSheet); // This will re-render and re-attach listeners
+            populateSheetModal(currentCharacterSheet);
         }
+        // If the inventory modal is open and inventory was updated, refresh it
         if (inventoryModal.style.display === 'block' && data.updatedSheet.inventory) {
              populateInventoryModal(currentCharacterSheet.inventory || []);
         }
+        // *** ADD THIS CHECK ***
+        // If the feats modal is open and feats/traits were updated, refresh it
+        if (featsModal.style.display === 'block' && data.updatedSheet.featsAndTraits) {
+            populateFeatsModal(currentCharacterSheet.featsAndTraits || []);
+        }
+
     } else {
         // If you store all sheets locally for some reason, update that specific sheet.
         console.log(`Sheet updated for ${data.playerName} (another user).`);
+        // Potentially update a global sheet store if you implement one later
     }
 });
 
@@ -1064,3 +1083,136 @@ document.addEventListener('DOMContentLoaded', () => {
     // Ensure populateDiceRollerControls is called if needed here,
     // or ensure it's called after auth success which is likely fine.
 });
+// Feats Modal Control
+if (openFeatsButton) {
+    openFeatsButton.addEventListener('click', () => {
+        if (currentCharacterSheet) {
+            // Ensure featsAndTraits exists, default to empty array if not
+            populateFeatsModal(currentCharacterSheet.featsAndTraits || []);
+            featsModal.style.display = 'block';
+        } else {
+            addMessageToChat("Please log in to manage Feats & Traits.");
+            console.warn("Cannot open Feats & Traits: currentCharacterSheet is not available.");
+        }
+    });
+}
+
+if (closeFeatsModalButton) {
+    closeFeatsModalButton.addEventListener('click', () => {
+        featsModal.style.display = 'none';
+    });
+}
+function createFeatTraitRowElement(featTrait = {}) {
+    const itemRowDiv = document.createElement('div');
+    itemRowDiv.className = 'feat-trait-row'; // Use the new class
+
+    const nameInput = document.createElement('input');
+    nameInput.type = 'text';
+    nameInput.value = featTrait.name || '';
+    nameInput.placeholder = "Feat/Trait Name";
+    nameInput.className = 'feat-trait-name'; // Specific class for name
+
+    const descTextarea = document.createElement('textarea'); // Use textarea
+    descTextarea.value = featTrait.description || '';
+    descTextarea.placeholder = 'Description';
+    descTextarea.className = 'feat-trait-desc'; // Specific class for description
+    descTextarea.rows = 3; // Start with 3 rows, adjustable via CSS resize
+
+    const removeButton = document.createElement('button');
+    removeButton.textContent = 'Remove';
+    removeButton.className = 'remove-item-btn'; // Reuse inventory remove button style
+    removeButton.type = 'button';
+    removeButton.onclick = () => {
+        itemRowDiv.remove(); // Remove this specific row
+    };
+
+    itemRowDiv.appendChild(nameInput);
+    itemRowDiv.appendChild(descTextarea);
+    itemRowDiv.appendChild(removeButton);
+
+    return itemRowDiv;
+}
+
+
+// Function to populate the Feats & Traits modal content
+function populateFeatsModal(featsAndTraitsArray) {
+    if (!modalFeatsContent) {
+        console.error("Feats modal content element not found!");
+        return;
+    }
+    modalFeatsContent.innerHTML = ''; // Clear previous content
+
+    const listContainerDiv = document.createElement('div');
+    listContainerDiv.id = 'feats-list-display'; // Use the new ID for the scrollable list
+
+    if (featsAndTraitsArray && Array.isArray(featsAndTraitsArray) && featsAndTraitsArray.length > 0) {
+        featsAndTraitsArray.forEach((item) => {
+            listContainerDiv.appendChild(createFeatTraitRowElement(item));
+        });
+    } else {
+        const noItemsMsg = document.createElement('p');
+        noItemsMsg.textContent = "No feats or traits defined. Click 'Add New' to start.";
+        listContainerDiv.appendChild(noItemsMsg);
+    }
+    modalFeatsContent.appendChild(listContainerDiv);
+
+    // "Add New Feat/Trait" button
+    const addButton = document.createElement('button');
+    addButton.textContent = 'Add New Feat/Trait';
+    addButton.type = 'button';
+    addButton.id = 'add-feat-trait-btn'; // Use the new ID for the add button
+    addButton.onclick = () => {
+        const noItemsMessageElement = listContainerDiv.querySelector('p');
+        if (noItemsMessageElement && noItemsMessageElement.textContent.startsWith("No feats")) {
+            noItemsMessageElement.remove(); // Remove the 'No items' message
+        }
+
+        const newItemRow = createFeatTraitRowElement(); // Creates a blank item row
+        listContainerDiv.appendChild(newItemRow);
+        const newNameInput = newItemRow.querySelector('.feat-trait-name');
+        if (newNameInput) {
+            newNameInput.focus(); // Focus the name field of the new row
+        }
+    };
+    modalFeatsContent.appendChild(addButton); // Add button after the list
+
+    if (saveFeatsButton) saveFeatsButton.style.display = 'inline-block'; // Ensure save button is visible
+}
+// Save Feats & Traits Button Listener
+if (saveFeatsButton) {
+    saveFeatsButton.addEventListener('click', () => {
+        if (!currentCharacterSheet || !currentAuthenticatedUsername) {
+            console.error("Cannot save Feats & Traits: User not authenticated or sheet data missing.");
+            addMessageToChat("Error: Cannot save Feats & Traits. Please log in again.");
+            return;
+        }
+
+        const newFeatsAndTraits = [];
+        // Select all DOM rows representing feat/trait items from the modal
+        const featTraitRows = modalFeatsContent.querySelectorAll('#feats-list-display .feat-trait-row');
+
+        featTraitRows.forEach(row => {
+            const nameInput = row.querySelector('.feat-trait-name');
+            const descTextarea = row.querySelector('.feat-trait-desc'); // Get textarea
+
+            const name = nameInput ? nameInput.value.trim() : '';
+            const description = descTextarea ? descTextarea.value.trim() : '';
+
+            if (name) { // Only save if it has a name
+                newFeatsAndTraits.push({
+                    name: name,
+                    description: description
+                });
+            }
+        });
+
+        console.log("Emitting 'update character sheet' (Feats & Traits only) with data:", newFeatsAndTraits);
+        socket.emit('update character sheet', {
+            sheetUpdates: { featsAndTraits: newFeatsAndTraits } // Send ONLY the featsAndTraits array
+        });
+
+        addMessageToChat("Saving Feats & Traits changes...");
+        // Optional: Close modal after save?
+        // featsModal.style.display = 'none';
+    });
+}
