@@ -1020,4 +1020,47 @@ if (dmSecretDescriptionInput) {
         }
     });
 }
+const darkModeToggleButton = document.getElementById('darkModeToggle');
 
+// Function to apply dark mode
+function applyDarkMode(isDark) {
+    if (isDark) {
+        document.body.classList.add('dark-mode');
+    } else {
+        document.body.classList.remove('dark-mode');
+    }
+}
+
+// Dark Mode Toggle Button Listener
+if (darkModeToggleButton) {
+    darkModeToggleButton.addEventListener('click', () => {
+        const isCurrentlyDark = document.body.classList.contains('dark-mode');
+        applyDarkMode(!isCurrentlyDark);
+        // Save preference to localStorage
+        try {
+            localStorage.setItem('darkMode', !isCurrentlyDark);
+        } catch (e) {
+            console.warn("Could not save dark mode preference to localStorage:", e);
+        }
+    });
+}
+
+// Check for saved dark mode preference on load
+document.addEventListener('DOMContentLoaded', () => {
+    try {
+        const savedDarkMode = localStorage.getItem('darkMode');
+        if (savedDarkMode !== null) {
+            applyDarkMode(savedDarkMode === 'true');
+        } else {
+            // Optional: Check system preference if no saved preference
+            // This is more advanced and requires matchMedia
+            // if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+            //     applyDarkMode(true);
+            // }
+        }
+    } catch (e) {
+        console.warn("Could not load dark mode preference from localStorage:", e);
+    }
+    // Ensure populateDiceRollerControls is called if needed here,
+    // or ensure it's called after auth success which is likely fine.
+});

@@ -1,14 +1,112 @@
+/* style.css */
+
+/* --- Color Variables --- */
+:root {
+    --bg-color: #f4f4f4;
+    --text-color: #333;
+    --text-color-light: #555; /* Lighter text for less emphasis */
+    --text-color-heading: #333;
+    --container-bg: #fff;
+    --container-border: #e0e0e0;
+    --nested-container-bg: #fdfdfd; /* For boxes inside containers */
+    --sidebar-bg: #f9f9f9;
+    --input-bg: #fff;
+    --input-border: #ccc;
+    --input-placeholder-color: #999;
+    --button-bg: #007bff;
+    --button-text: #fff;
+    --button-hover-bg: #0056b3;
+    --chat-messages-bg: #e9e9e9;
+    --modal-bg: #fefefe;
+    --modal-overlay-bg: rgba(0,0,0,0.5);
+    --link-color: #007bff;
+    --link-hover-color: #0056b3;
+    --hr-color: #eee;
+    --error-color: red;
+    --error-color-light: #dc3545; /* For backgrounds/borders maybe */
+    --dm-toggle-bg: #555;
+    --dm-toggle-text: #fff;
+    --dm-toggle-border: #777;
+    --dm-tool-header-color: #880000;
+    --dm-secret-button-bg: #c82333;
+    --dm-secret-button-hover-bg: #aF1d2A;
+    --dm-message-text: green;
+    --dm-error-text: red;
+    --dm-secret-roll-text: #551a8b;
+    --dm-secret-roll-bg: #f0e6f6;
+    --dm-secret-roll-border: #551a8b;
+    --user-list-item-border: #ddd;
+    --user-list-item-text: #444;
+    --user-list-highlight: var(--link-color);
+    --inventory-list-bg: #f9f9f9;
+    --inventory-row-bg: #fff;
+    --inventory-row-border: #eee;
+    --remove-button-bg: #dc3545;
+    --remove-button-hover-bg: #c82333;
+    --add-button-bg: #28a745;
+    --add-button-hover-bg: #218838;
+}
+
+body.dark-mode {
+    --bg-color: #121212;
+    --text-color: #e0e0e0;
+    --text-color-light: #aaa;
+    --text-color-heading: #e0e0e0;
+    --container-bg: #1e1e1e;
+    --container-border: #333;
+    --nested-container-bg: #252525;
+    --sidebar-bg: #232323;
+    --input-bg: #2a2a2a;
+    --input-border: #444;
+    --input-placeholder-color: #777;
+    --button-bg: #495057;      /* NEW: Greyish-blue button background */
+    --button-text: #e0e0e0;     /* Keep text light */
+    --button-hover-bg: #6c757d; /* NEW: Lighter greyish-blue on hover */
+    --chat-messages-bg: #2c2c2c;
+    --modal-bg: #282828;
+    --modal-overlay-bg: rgba(0,0,0,0.7);
+    --link-color: #69b3ff;
+    --link-hover-color: #8ec9ff;
+    --hr-color: #444;
+    --error-color: #ff7b7b; /* Lighter red for errors */
+    --error-color-light: #d9534f;
+    --dm-toggle-bg: #f0f0f0;
+    --dm-toggle-text: #333;
+    --dm-toggle-border: #ccc;
+    --dm-tool-header-color: #ff6b6b;
+    --dm-secret-button-bg: #aF1d2A;
+    --dm-secret-button-hover-bg: #8e1622;
+    --dm-message-text: #5cb85c;
+    --dm-error-text: #d9534f;
+    --dm-secret-roll-text: #c594f5;
+    --dm-secret-roll-bg: #3a2f40;
+    --dm-secret-roll-border: #c594f5;
+    --user-list-item-border: #444;
+    --user-list-item-text: #bbb;
+    --user-list-highlight: var(--link-color);
+    --inventory-list-bg: var(--input-bg);
+    --inventory-row-bg: var(--container-bg);
+    --inventory-row-border: var(--container-border);
+    --remove-button-bg: var(--error-color-light);
+    --remove-button-hover-bg: #c82333; /* Keep hover dark red */
+    --add-button-bg: #218838; /* Darker green */
+    --add-button-hover-bg: #1e7e34;
+}
+/* --- End Color Variables --- */
+
 
 html, body {
     height: 100%;
     margin: 0;
     padding: 0;
     font-family: sans-serif;
-    background-color: #f4f4f4;
+    background-color: var(--bg-color);
+    color: var(--text-color);
     box-sizing: border-box;
+    transition: background-color 0.3s, color 0.3s;
 }
 
-*, *:before, *:after { 
+*, *:before, *:after {
     box-sizing: inherit;
 }
 
@@ -19,23 +117,29 @@ body {
     padding: 20px;
 }
 
-h1 { 
-    color: #333;
-    text-align: center;
-    width: 100%;
-    margin-bottom: 20px;
+/* Apply transitions to other elements */
+#app-container, .modal-content, #auth-area, #character-sheet-area, #dice-roll-area, #middle-column-chat, #sidebar-area, #inventory-list-display, .inventory-item-row {
+    transition: background-color 0.3s, border-color 0.3s;
+}
+input[type="text"], input[type="number"], input[type="password"], select {
+     transition: background-color 0.3s, border-color 0.3s, color 0.3s;
+}
+button {
+    transition: background-color 0.2s, color 0.2s;
 }
 
-h2 {
-    color: #333;
-    margin-top: 0; 
+
+h1, h2, h3, h4 {
+    color: var(--text-color-heading);
+    margin-top: 0; /* Reset default */
+}
+h2, #character-rolls-container h3 { /* Headings with bottom border */
     padding-bottom: 5px;
-    border-bottom: 1px solid #eee;
+    border-bottom: 1px solid var(--hr-color);
 }
-
 
 #auth-area {
-    background-color: #fff;
+    background-color: var(--container-bg);
     padding: 20px;
     border-radius: 8px;
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
@@ -44,131 +148,224 @@ h2 {
     max-width: 400px;
 }
 #auth-area h3 {
-    margin-top: 0;
+    margin-bottom: 15px;
+}
+#authError {
+    color: var(--error-color);
+    margin-top: 10px;
+}
+
+hr {
+    border: none;
+    border-top: 1px solid var(--hr-color);
+    margin: 20px 0;
 }
 
 
 #app-container {
     display: flex;
-    flex-direction: row; 
+    flex-direction: row;
     width: 100%;
-    max-width: 1600px;  
-    gap: 20px;           
-    background-color: #fff;
+    max-width: 1600px;
+    gap: 20px;
+    background-color: var(--container-bg);
     padding: 15px;
     border-radius: 8px;
     box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-    align-items: stretch; 
+    align-items: stretch;
 }
 
-
 #left-column {
-    flex-basis: 320px;  
+    flex-basis: 320px;
     flex-shrink: 0;
     display: flex;
     flex-direction: column;
     gap: 15px;
 }
 
-#character-sheet-area, #dice-roll-area {
+#character-sheet-area,
+#dice-roll-area {
     padding: 15px;
-    border: 1px solid #e0e0e0;
+    border: 1px solid var(--container-border);
     border-radius: 5px;
-    background-color: #fdfdfd;
+    background-color: var(--nested-container-bg);
+}
+
+#dice-roll-area h2 { /* "Custom Roller" title */
+    margin-bottom: 15px;
+}
+#dice-roll-area #customDiceInput {
+    width: calc(100% - 125px);
+    margin-right: 5px;
+    display: inline-block;
+    vertical-align: middle;
+}
+#dice-roll-area #customRollButton {
+    width: 110px;
+    display: inline-block;
+    vertical-align: middle;
 }
 
 
 #middle-column-chat {
-    flex-grow: 1;       
+    flex-grow: 1;
     display: flex;
     flex-direction: column;
     padding: 15px;
-    border: 1px solid #e0e0e0;
+    border: 1px solid var(--container-border);
     border-radius: 5px;
-    background-color: #fdfdfd;
+    background-color: var(--nested-container-bg);
+    min-width: 300px;
 }
 
 #chat-messages {
-    flex-grow: 1; 
+    flex-grow: 1;
     overflow-y: auto;
-    border: 1px solid #ccc;
+    border: 1px solid var(--container-border);
     padding: 10px;
     margin-bottom: 10px;
-    background-color: #e9e9e9;
-    min-height: 300px; 
+    background-color: var(--chat-messages-bg);
+    min-height: 400px;
+}
+/* Style chat paragraphs */
+#chat-messages p {
+    margin: 0 0 5px 0; /* Compact spacing */
+    line-height: 1.4;
+    word-wrap: break-word; /* Prevent long words/URLs from breaking layout */
 }
 
-.chat-input-container { 
+
+.chat-input-container {
     display: flex;
     gap: 10px;
-    margin-top: auto; 
+    margin-top: auto;
     flex-shrink: 0;
 }
-
 .chat-input-container input[type="text"] {
     flex-grow: 1;
-    margin-bottom: 0; 
+    margin-bottom: 0;
 }
 
 
 #sidebar-area {
-    flex-basis: 250px;
+    flex-basis: 320px;
     flex-shrink: 0;
     padding: 15px;
-    border: 1px solid #e0e0e0;
+    border: 1px solid var(--container-border);
     border-radius: 5px;
-    background-color: #f9f9f9;
+    background-color: var(--sidebar-bg);
+    display: flex;
+    flex-direction: column;
 }
 
 #user-list {
     list-style-type: none;
     padding-left: 0;
     margin-top: 10px;
+    margin-bottom: 10px;
+    max-height: 200px;
+    overflow-y: auto;
+    border: 1px solid var(--container-border);
+    padding: 5px;
+    background-color: var(--input-bg);
 }
-
 #user-list li {
     padding: 6px 3px;
-    border-bottom: 1px dotted #ddd;
+    border-bottom: 1px dotted var(--user-list-item-border);
     font-size: 0.95em;
-    color: #444;
+    color: var(--user-list-item-text);
 }
+#user-list li:last-child { border-bottom: none; }
+#user-list li strong { color: var(--user-list-highlight); }
 
-#user-list li:last-child {
-    border-bottom: none;
+
+#character-rolls-container {
+    margin-top: 15px;
+    padding-top: 15px;
+    border-top: 1px solid var(--container-border);
+    flex-grow: 1;
+    overflow-y: auto;
 }
-
-#user-list li strong { 
-    color: #007bff;
+#character-rolls-container h3 { margin-bottom: 10px; }
+#character-rolls-container h4 {
+    margin-top: 10px;
+    margin-bottom: 8px;
+    font-size: 0.95em;
+}
+#character-rolls-container div[id$="-section"] { margin-bottom: 10px; }
+#character-rolls-container button {
+    margin-right: 4px;
+    margin-bottom: 4px;
+    padding: 5px 8px;
+    font-size: 0.85em;
+}
+#character-rolls-container #skillCheckSelect {
+    padding: 6px;
+    border-radius: 4px;
+    border: 1px solid var(--input-border);
+    background-color: var(--input-bg);
+    color: var(--text-color);
+    width: calc(100% - 130px);
+    margin-right: 5px;
+    display: inline-block;
+    vertical-align: middle;
+}
+#character-rolls-container #rollSkillCheckButton {
+    width: 120px;
+     display: inline-block;
+     vertical-align: middle;
+}
+#character-rolls-container p {
+    margin-top: 15px;
+    font-weight: bold;
+    color: var(--text-color);
+    font-size: 0.9em;
+}
+#character-rolls-container #rollResult {
+    font-weight: normal;
+    color: var(--link-color);
 }
 
 
 input[type="text"], input[type="number"], input[type="password"] {
     padding: 8px;
     margin-bottom: 10px;
-    border: 1px solid #ccc;
+    border: 1px solid var(--input-border);
+    background-color: var(--input-bg);
+    color: var(--text-color);
     border-radius: 4px;
-    width: 100%; 
+    width: 100%;
 }
 #auth-area input[type="text"], #auth-area input[type="password"] {
-    width: calc(100% - 18px); 
+    width: calc(100% - 18px); /* Account for padding/border? */
+}
+input::placeholder {
+    color: var(--input-placeholder-color);
 }
 
 
 button {
     padding: 10px 15px;
-    background-color: #007bff;
-    color: white;
+    background-color: var(--button-bg);
+    color: var(--button-text);
     border: none;
     border-radius: 4px;
     cursor: pointer;
     font-size: 0.95em;
 }
-
 button:hover {
-    background-color: #0056b3;
+    background-color: var(--button-hover-bg);
+}
+#darkModeToggle {
+    background-color: var(--dm-toggle-bg);
+    color: var(--dm-toggle-text);
+    border: 1px solid var(--dm-toggle-border);
+    padding: 8px 12px;
+    font-size: 0.9em;
+    margin-left: 20px; /* Space it from the H1 */
 }
 
-
+/* Modal Styles */
 .modal {
     display: none;
     position: fixed;
@@ -178,138 +375,80 @@ button:hover {
     width: 100%;
     height: 100%;
     overflow: auto;
-    background-color: rgba(0,0,0,0.5);
+    background-color: var(--modal-overlay-bg);
     padding-top: 60px;
 }
-
 .modal-content {
-    background-color: #fefefe;
+    background-color: var(--modal-bg);
     margin: 5% auto;
     padding: 20px;
-    border: 1px solid #888;
+    border: 1px solid var(--container-border);
     width: 80%;
-    max-width: 700px;
+    max-width: 700px; /* Character sheet */
     border-radius: 8px;
     position: relative;
     max-height: 80vh;
     overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+}
+#inventoryModal .modal-content {
+    max-width: 550px;
+    margin: 5% auto;
+    max-height: 85vh;
 }
 
 .close-button {
-    color: #aaa;
-
+    color: var(--text-color-light);
     position: absolute;
     top: 10px;
     right: 20px;
     font-size: 28px;
     font-weight: bold;
+    cursor: pointer;
+    z-index: 10;
 }
-
 .close-button:hover,
 .close-button:focus {
-    color: black;
+    color: var(--text-color);
     text-decoration: none;
-    cursor: pointer;
-}
-
-#modalSheetContent p {
-    margin-bottom: 8px;
-    line-height: 1.6;
-}
-#modalSheetContent p strong {
-    display: inline-block;
-    min-width: 150px;
-}
-
-.sheet-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-    gap: 15px;
-}
-
-.sheet-grid div p {
-    margin-bottom: 5px;
-}
-#inventory-list-display {
-    max-height: 250px;
-    overflow-y: auto;
-    border: 1px solid #ddd;
-    padding: 10px;
-    margin-bottom: 10px;
-    background-color: #f9f9f9;
-}
-
-.inventory-item-row {
-    display: flex;
-    gap: 10px;
-    align-items: center;
-    margin-bottom: 8px;
-    padding: 8px;
-    border: 1px solid #eee;
-    border-radius: 4px;
-    background-color: #fff;
-}
-
-.inventory-item-row input[type="text"],
-.inventory-item-row input[type="number"] {
-    margin-bottom: 0;
-    padding: 6px;
-}
-
-.inventory-item-name { flex-grow: 2; }
-.inventory-item-qty { flex-basis: 70px; flex-shrink: 0; text-align: center; }
-.inventory-item-desc { flex-grow: 3; }
-
-.remove-item-btn {
-    background-color: #dc3545; color: white; padding: 6px 10px;
-    font-size: 0.85em; border: none; border-radius: 4px; cursor: pointer;
-}
-.remove-item-btn:hover { background-color: #c82333; }
-
-#add-inventory-item-btn {
-    background-color: #28a745; color: white; padding: 8px 12px;
-    border: none; border-radius: 4px; cursor: pointer; margin-top: 5px;
-}
-#add-inventory-item-btn:hover { background-color: #218838; }
-.sheet-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-    gap: 10px; /* Reduced gap slightly */
-}
-
-.sheet-grid.three-columns { /* New style for ST and Skills */
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); /* Adjust minmax for 3 columns */
-    gap: 8px;
 }
 
 
 #modalSheetContent p {
-    margin-bottom: 6px; /* Slightly reduced margin */
+    margin-bottom: 6px;
     line-height: 1.5;
 }
 #modalSheetContent p strong {
     display: inline-block;
-    min-width: 140px; /* Adjusted min-width */
+    min-width: 140px;
+    color: var(--text-color-heading); /* Make labels slightly stronger */
 }
-
-/* Style for proficiency elements */
 #modalSheetContent input[type="checkbox"] {
     margin-right: 5px;
     vertical-align: middle;
 }
-#modalSheetContent label { /* Labels next to checkboxes */
+#modalSheetContent label {
     vertical-align: middle;
 }
-
+.sheet-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 10px;
+}
+.sheet-grid.three-columns {
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 8px;
+}
 #modalSheetContent .sheet-grid p,
 #modalSheetContent .sheet-grid.three-columns p {
-    display: flex; /* Helps align checkbox, label, bonus nicely */
+    display: flex;
     align-items: center;
     margin-bottom: 4px;
 }
-#modalSheetContent .sheet-grid p strong, /* For ability scores */
-#modalSheetContent .sheet-grid.three-columns p label { /* For ST/Skill labels */
-    min-width: auto; /* Override general strong min-width */
+#modalSheetContent .sheet-grid p strong,
+#modalSheetContent .sheet-grid.three-columns p label {
+    min-width: auto;
     margin-right: 5px;
 }
 #modalSheetContent .sheet-grid.three-columns p input[type="checkbox"]{
@@ -318,101 +457,137 @@ button:hover {
 #modalSheetContent .sheet-grid.three-columns p label {
     flex-grow: 1;
 }
-#modalSheetContent .sheet-grid.three-columns p span { /* Bonus and ability hint */
-    margin-left: auto; /* Push bonus and hint to the right */
-    padding-left: 5px; /* Space before bonus */
+#modalSheetContent .sheet-grid.three-columns p span {
+    margin-left: auto;
+    padding-left: 5px;
     flex-shrink: 0;
+    color: var(--text-color-light); /* Modifiers, bonus text slightly lighter */
 }
-#dice-roll-area h4 {
-    margin-top: 15px;
+
+
+#inventory-list-display {
+    max-height: 450px;
+    overflow-y: auto;
+    border: 1px solid var(--container-border);
+    padding: 10px;
+    margin-bottom: 10px;
+    background-color: var(--inventory-list-bg);
+    flex-shrink: 1;
+    min-height: 100px;
+}
+.inventory-item-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
     margin-bottom: 8px;
-    color: #444;
-    border-bottom: 1px solid #eee;
-    padding-bottom: 3px;
-}
-
-#dice-roll-area div[id$="-section"] { /* Target divs ending with -section */
-    margin-bottom: 15px;
-}
-
-#dice-roll-area button {
-    margin-right: 5px;
-    margin-bottom: 5px;
-    padding: 6px 10px; /* Slightly smaller buttons for dice area */
-    font-size: 0.9em;
-}
-
-#customDiceInput {
-    width: calc(100% - 125px); /* Adjust based on button width */
-    margin-right: 5px;
-    display: inline-block; /* For alignment with button */
-    vertical-align: middle;
-}
-#customRollButton {
-    width: 110px; /* Fixed width for custom roll button */
-    display: inline-block;
-    vertical-align: middle;
-}
-
-#skillCheckSelect {
-    padding: 7px;
+    padding: 6px 8px;
+    border: 1px solid var(--inventory-row-border);
     border-radius: 4px;
-    border: 1px solid #ccc;
+    background-color: var(--inventory-row-bg);
+}
+.inventory-item-row input[type="text"],
+.inventory-item-row input[type="number"] {
+    margin-bottom: 0;
+    padding: 6px;
+    border: 1px solid var(--input-border); /* Use input border */
+    border-radius: 3px;
+}
+.inventory-item-name {
+    flex-grow: 2;
+    flex-basis: 120px;
+    min-width: 100px;
+}
+.inventory-item-qty {
+    flex-grow: 0;
+    flex-shrink: 0;
+    flex-basis: 60px;
+    text-align: center;
+}
+.inventory-item-desc {
+    flex-grow: 4;
+    flex-basis: 150px;
+    min-width: 130px;
+}
+.remove-item-btn {
+    flex-grow: 0;
+    flex-shrink: 0;
+    background-color: var(--remove-button-bg);
+    color: white; /* Keep text white */
+    padding: 6px 10px;
+    font-size: 0.85em;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+.remove-item-btn:hover { background-color: var(--remove-button-hover-bg); }
+#add-inventory-item-btn {
+    background-color: var(--add-button-bg);
+    color: white;
+    padding: 8px 12px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    margin-top: 5px;
+    align-self: flex-start;
+}
+#add-inventory-item-btn:hover { background-color: var(--add-button-hover-bg); }
+#inventoryModal #saveInventoryButton,
+#sheetModal #saveSheetButton {
+    margin-top: auto;
+    padding-top: 15px;
+    align-self: flex-end;
 }
 
-#dice-roll-area p { /* For the "Last Roll" display */
+
+/* DM Tools Styles */
+#dm-tools-section {
+    border-top: 2px dashed var(--container-border);
+    padding-top: 15px;
     margin-top: 15px;
-    font-weight: bold;
-    color: #333;
-}
-#rollResult {
-    font-weight: normal;
-    color: #007bff;
 }
 #dm-tools-section h3, #dm-tools-section h4 {
-    color: #880000; /* Dark red for DM section titles */
+    color: var(--dm-tool-header-color);
 }
-
-#dmSecretDescriptionInput {
-    width: calc(100% - 150px - 130px); /* Adjust based on sibling input and button */
-    margin-right: 5px;
-    display: inline-block;
-    vertical-align: middle;
-}
-
 #dmSecretDiceInput {
      width: 140px;
      margin-right: 5px;
      display: inline-block;
      vertical-align: middle;
 }
+#dmSecretDescriptionInput {
+    width: calc(100% - 150px - 130px);
+    margin-right: 5px;
+    display: inline-block;
+    vertical-align: middle;
+}
 #dmSecretRollButton {
     width: 120px;
     display: inline-block;
     vertical-align: middle;
-    background-color: #c82333; /* DM-specific button color */
+    background-color: var(--dm-secret-button-bg);
+    color: white; /* Keep text white */
 }
 #dmSecretRollButton:hover {
-    background-color: #aF1d2A;
+    background-color: var(--dm-secret-button-hover-bg);
 }
 
 
-/* Styling for DM messages in chat */
+/* Chat Message Styles */
 .dm-message {
-    color: green;
+    color: var(--dm-message-text);
     font-style: italic;
     font-weight: bold;
 }
 .dm-error {
-    color: red;
+    color: var(--dm-error-text);
     font-style: italic;
     font-weight: bold;
 }
 .dm-roll-secret {
-    color: #551a8b; /* Purple for secret DM rolls */
+    color: var(--dm-secret-roll-text);
     font-style: italic;
-    background-color: #f0e6f6; /* Light purple background */
+    background-color: var(--dm-secret-roll-bg);
     padding: 3px 5px;
-    border-left: 3px solid #551a8b;
+    border-left: 3px solid var(--dm-secret-roll-border);
     margin: 2px 0;
 }
