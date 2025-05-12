@@ -300,14 +300,14 @@ io.on('connection',(socket)=>{
     socket.emit('chat history', chatHistory);
     socket.emit('server message', { text: 'Welcome! You are connected.' }); // Send welcome msg 
     // Update character sheet
-    socket.on('update character sheet', async (data) => {
+ socket.on('update character sheet', async (data) => {
         const username = activeUsers[socket.id];
         if (!username) {
             return socket.emit('sheet update error', { message: 'User not authenticated.' });
         }
 
-        if (!data || !data.sheetUpdates) {
-            return socket.emit('sheet update error', { message: 'No sheet update data provided.' });
+        if (!data || !data.sheetUpdates || typeof data.sheetUpdates !== 'object') {
+            return socket.emit('sheet update error', { message: 'Invalid or no sheet update data provided.' });
         }
 
         try {
@@ -321,51 +321,71 @@ io.on('connection',(socket)=>{
                 return socket.emit('sheet update error', { message: 'Character sheet not found.' });
             }
 
-            // --- MODIFIED UPDATE LOGIC ---
+            console.log(`[Update Sheet - ${username}] Received updates for keys:`, Object.keys(data.sheetUpdates));
+
+            // --- FINAL REVISED UPDATE LOGIC ---
             for (const key in data.sheetUpdates) {
-                // Check if the key exists directly in the schema's paths
-                // Mongoose's schema.path(key) returns the schema type info if the path exists
-                if (CharacterSheet.schema.path(key) && key !== '_id' && key !== 'userId' && key !== 'playerName') {
+                console.log(`[Update Sheet - ${username}] Processing key: '${key}'`);
 
-                    // Direct assignment is often sufficient for Mongoose to handle validation
-                    // and type coercion based on the schema, including nested objects/arrays.
-                    sheet[key] = data.sheetUpdates[key];
+                // Skip protected fields
+                if (key === '_id' || key === 'userId' || key === 'playerName') {
+                    console.warn(`[Update Sheet - ${username}] Attempted to update protected field: ${key}. Skipping.`);
+                    continue;
+                }
 
-                    // Optional: Add specific parsing ONLY if needed (e.g., ensuring numbers from strings)
-                    // Example (keep if you had issues with numbers previously):
-                    /*
-                    if (CharacterSheet.schema.path(key).instance === 'Number' && typeof data.sheetUpdates[key] !== 'number') {
-                        const numValue = parseFloat(data.sheetUpdates[key]);
-                        // Assign parsed number if valid, otherwise let Mongoose handle/validate potentially incorrect type
-                        // Or assign existing value: sheet[key] = isNaN(numValue) ? sheet[key] : numValue;
-                        sheet[key] = isNaN(numValue) ? data.sheetUpdates[key] : numValue; // Assign potentially invalid if NaN for Mongoose validation
+                // Check 1: Does schema.path() recognize it? (Preferred method)
+                const pathInfo = CharacterSheet.schema.path(key);
+                let isValidPath = !!pathInfo; // Convert pathInfo to boolean
+
+                // Check 2: If schema.path() failed, does the key exist on the document instance? (Fallback)
+                // This handles cases where schema.path might unexpectedly fail for complex objects.
+                // Using `key in sheet` also checks prototype chain, which is fine here.
+                if (!isValidPath && (key in sheet)) {
+                    console.warn(`[Update Sheet - ${username}] Key '${key}' not found by schema.path(), but exists on document. Allowing update.`);
+                    isValidPath = true; // Treat as valid based on fallback check
+                }
+
+                if (isValidPath) {
+                    // Path is considered valid either by schema.path() or by existing on the document
+                    if(pathInfo) { // Log type only if pathInfo was found
+                        console.log(`[Update Sheet - ${username}] Key '${key}' is a valid schema path. Type: ${pathInfo.instance}. Assigning value.`);
                     } else {
-                        sheet[key] = data.sheetUpdates[key]; // Assign other types directly
+                        console.log(`[Update Sheet - ${username}] Key '${key}' allowed via fallback check. Assigning value.`);
                     }
-                    */
+                    try {
+                        // Direct assignment using Mongoose setter logic
+                        sheet[key] = data.sheetUpdates[key];
+                    } catch(assignError) {
+                        console.error(`[Update Sheet - ${username}] Error assigning value for key '${key}':`, assignError);
+                    }
 
                 } else {
-                    // This warning is now more likely to catch genuinely incorrect field names
-                    console.warn(`Attempted to update disallowed or non-existent field: ${key}`);
+                    // If BOTH checks failed, then it's truly an unknown field.
+                    console.warn(`[Update Sheet - ${username}] Field '${key}' is not a valid schema path AND not found on document. Update disallowed.`);
                 }
             }
-            // --- END MODIFIED UPDATE LOGIC ---
+            // --- END FINAL REVISED UPDATE LOGIC ---
 
             await sheet.save(); // Mongoose performs validation here
 
-            console.log(`Character sheet for ${username} updated successfully. Updated fields: ${Object.keys(data.sheetUpdates).join(', ')}`);
+            console.log(`[Update Sheet - ${username}] Sheet saved successfully.`);
 
             // Emit the full updated sheet
             io.emit('character sheet updated', {
                 playerName: username,
-                updatedSheet: sheet.toObject() // Send the full, updated sheet as a plain object
+                updatedSheet: sheet.toObject()
             });
 
         } catch (err) {
-            console.error(`Error updating character sheet for ${username}:`, err);
-            // Check for validation errors specifically
+            console.error(`[Update Sheet - ${username}] Error during sheet update process:`, err);
+            // (Keep existing validation error logging)
             if (err.name === 'ValidationError') {
-                socket.emit('sheet update error', { message: `Validation failed: ${err.message}` });
+                let validationMessages = [];
+                for (let field in err.errors) {
+                    validationMessages.push(err.errors[field].message);
+                }
+                console.error(`[Update Sheet - ${username}] Validation Errors:`, validationMessages.join('; '));
+                socket.emit('sheet update error', { message: `Validation failed: ${validationMessages.join('; ')}` });
             } else {
                 socket.emit('sheet update error', { message: 'Server error while saving sheet.' });
             }

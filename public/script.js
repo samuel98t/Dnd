@@ -694,7 +694,7 @@ socket.on('update user list', (userArray) => { // userArray is expected to be an
 });
 
 // Populate inventory modal
-function populateInventoryModal(inventoryDataArray) {
+function populateInventoryModal(inventoryDataArray, sheetData = null) {
     if (!modalInventoryContent) {
         console.error("element not found");
         return;
@@ -819,6 +819,7 @@ if (closeInventoryModalButton) {
 }
 
 // Save inventory 
+// Save inventory Button Listener - CORRECTED TO INCLUDE MONEY
 if (saveInventoryButton) {
     saveInventoryButton.addEventListener('click', () => {
         if (!currentCharacterSheet || !currentAuthenticatedUsername) {
@@ -828,10 +829,10 @@ if (saveInventoryButton) {
         }
 
         const newInventory = [];
-        // Select all DOM rows representing inventory items from the inventory modal
+        // Select all DOM rows representing inventory items from the inventory modal's specific list container
         const inventoryItemRows = modalInventoryContent.querySelectorAll('#inventory-list-display .inventory-item-row');
 
-        inventoryItemRows.forEach(row => {
+        inventoryItemRows.forEach(row => { // Loop starts here
             const nameInput = row.querySelector('.inventory-item-name');
             const qtyInput = row.querySelector('.inventory-item-qty');
             const descInput = row.querySelector('.inventory-item-desc');
@@ -844,9 +845,11 @@ if (saveInventoryButton) {
                 newInventory.push({
                     name: name,
                     quantity: isNaN(quantity) || quantity < 0 ? 0 : quantity, // Ensure quantity is valid
-                    description: description
+                    description: description || '' // Ensure description is at least empty string
                 });
             }
+        }); // <<<< Loop ENDS here
+
         // *** GET MONEY VALUES ***
         const moneyUpdates = {};
         const cp = parseInt(document.getElementById('moneyCP')?.value, 10);
@@ -855,22 +858,29 @@ if (saveInventoryButton) {
         const gp = parseInt(document.getElementById('moneyGP')?.value, 10);
         const pp = parseInt(document.getElementById('moneyPP')?.value, 10);
 
-        moneyUpdates.cp = isNaN(cp) ? 0 : cp;
-        moneyUpdates.sp = isNaN(sp) ? 0 : sp;
-        moneyUpdates.ep = isNaN(ep) ? 0 : ep;
-        moneyUpdates.gp = isNaN(gp) ? 0 : gp;
-        moneyUpdates.pp = isNaN(pp) ? 0 : pp;
+        // Use optional chaining and nullish coalescing for safety when getting elements
+        moneyUpdates.cp = isNaN(cp) ? (currentCharacterSheet?.cp ?? 0) : cp; // Default to current sheet value or 0
+        moneyUpdates.sp = isNaN(sp) ? (currentCharacterSheet?.sp ?? 0) : sp;
+        moneyUpdates.ep = isNaN(ep) ? (currentCharacterSheet?.ep ?? 0) : ep;
+        moneyUpdates.gp = isNaN(gp) ? (currentCharacterSheet?.gp ?? 0) : gp;
+        moneyUpdates.pp = isNaN(pp) ? (currentCharacterSheet?.pp ?? 0) : pp;
         // *** END GET MONEY VALUES ***
-        });
 
-        console.log("Emitting 'update character sheet' (inventory only) with data:", newInventory);
+        // *** COMBINE UPDATES ***
+        const combinedUpdates = {
+            inventory: newInventory, // The updated inventory array
+            ...moneyUpdates          // Spread the money fields (cp, sp, ep, gp, pp) into the object
+        };
+
+        console.log("Emitting 'update character sheet' (Inventory & Money) with data:", combinedUpdates); // Log the actual combined data
         socket.emit('update character sheet', {
-            sheetUpdates: { inventory: newInventory } // Send ONLY the inventory array
+            sheetUpdates: combinedUpdates // Send the combined object containing BOTH inventory and money
         });
 
-        addMessageToChat("Saving Inventory & Currency changes...");
+        addMessageToChat("Saving Inventory & Currency changes..."); // Message is now accurate
     });
 }
+
 // Helper to get proficiency bonus value 
 function getProficiencyBonusValue(sheetDataOrInput) {
     let pbVal = 0;
