@@ -10,10 +10,12 @@ const attacksModal = document.getElementById('attacksModal');
 const closeAttacksModalButton = document.getElementById('closeAttacksModal');
 const modalAttacksContent = document.getElementById('modalAttacksContent');
 const saveAttacksButton = document.getElementById('saveAttacksButton');
-//  Quick Roll Action Buttons 
+//  Quick  Action Buttons 
 const quickDamageButton = document.getElementById('quickDamageButton');
 const quickAttackButton = document.getElementById('quickAttackButton');
 const quickSpellAttackButton = document.getElementById('quickSpellAttackButton')
+const quickHpCurrentInput = document.getElementById('quickHpCurrent');
+const quickHpMaxInput = document.getElementById('quickHpMax');
 // MONEY
 const moneyCPInput = document.getElementById('moneyCP');
 const moneySPInput = document.getElementById('moneySP');
@@ -357,15 +359,22 @@ socket.on('auth success', (authData) => {
     if (playerNameInput) {
         playerNameInput.value = currentAuthenticatedUsername;
     }
+
+    // --- ADDED: Populate Quick HP ---
+    if (quickHpCurrentInput && quickHpMaxInput && currentCharacterSheet) {
+        quickHpCurrentInput.value = currentCharacterSheet.hpCurr ?? 0; // Default to 0 if null/undefined
+        quickHpMaxInput.value = currentCharacterSheet.HpMax ?? 0;
+    }
+    // --- END ADDED ---
+
     addMessageToChat(`Logged in as ${currentAuthenticatedUsername}. Welcome!`);
     authErrorDisplay.textContent = '';
 
     populateDiceRollerControls();
 
-    // Show DM tools if user is DM
     if (currentUserIsDM && dmToolsSection) {
         dmToolsSection.style.display = 'block';
-        addMessageToChat("DM Tools Unlocked.", "dm-message"); // Special class for DM messages
+        addMessageToChat("DM Tools Unlocked.", "dm-message");
     } else if (dmToolsSection) {
         dmToolsSection.style.display = 'none';
     }
@@ -420,7 +429,8 @@ function calculateModifier(score) {
     return modifier >= 0 ? `+${modifier}` : `${modifier}`; // Prepends '+' for positive/zero
 }
 
-function populateSheetModal(sheetData) {
+// Add isReadOnly parameter with default false
+function populateSheetModal(sheetData, isReadOnly = false) { // Ensure parameter is present
     if (!sheetData) {
         modalSheetContent.innerHTML = '<p>Error: No sheet data available.</p>';
         return;
@@ -428,17 +438,25 @@ function populateSheetModal(sheetData) {
 
     modalSheetContent.innerHTML = ''; // Clear previous content
 
+    // --- Add Title indication ---
+    const titleH2 = document.createElement('h2'); // Create title within the function
+    titleH2.textContent = isReadOnly ? `Viewing ${sheetData.playerName}'s Sheet (Read-Only)` : "Character Sheet";
+    modalSheetContent.appendChild(titleH2);
+    // --- End Title ---
+
+    // --- createDetailElement (checks !isReadOnly) ---
     const createDetailElement = (label, value, isEditable = false, fieldKey = null, inputTypeOverride = null, changeListener = null) => {
         const p = document.createElement('p');
         const strong = document.createElement('strong');
         strong.textContent = `${label}: `;
         p.appendChild(strong);
 
-        if (isEditable && fieldKey) {
+        // Check BOTH isEditable AND !isReadOnly before creating input
+        if (isEditable && fieldKey && !isReadOnly) {
             const input = document.createElement('input');
             if (inputTypeOverride) {
                 input.type = inputTypeOverride;
-            } else if (typeof value === 'number' || ['hpCurr', 'HpMax', 'characterLevel', 'strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma', 'inspiration', 'characterArmor', 'Initiative', /* ProficiencyBonus handled below */ 'characterSpeed'].includes(fieldKey) || fieldKey === 'ProficiencyBonus') {
+            } else if (typeof value === 'number' || ['hpCurr', 'HpMax', 'characterLevel', 'strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma', 'inspiration', 'characterArmor', 'Initiative', 'ProficiencyBonus', 'characterSpeed'].includes(fieldKey)) {
                 input.type = 'number';
             } else {
                 input.type = 'text';
@@ -459,55 +477,60 @@ function populateSheetModal(sheetData) {
                 modSpan.textContent = ` (Mod: ${calculateModifier(input.value)})`;
                 modSpan.style.marginLeft = '10px';
                 p.appendChild(modSpan);
-                input.addEventListener('input', (event) => { // Listener for ability score input
+                input.addEventListener('input', (event) => {
                     modSpan.textContent = ` (Mod: ${calculateModifier(event.target.value)})`;
-                    updateAllModalBonuses(); // Recalculate dependent bonuses
+                    updateAllModalBonuses();
                 });
             }
         } else {
+            // Display as plain text if not editable OR if in read-only mode
             p.appendChild(document.createTextNode(value || 'N/A'));
         }
         return p;
     };
 
+    // --- createProficiencyElement (checks isReadOnly) ---
     const createProficiencyElement = (labelText, fieldKey, baseAbilityKey, initialValue, proficiencyBonus, changeListener) => {
         const p = document.createElement('p');
-        
         const checkbox = document.createElement('input');
         checkbox.type = 'checkbox';
         checkbox.checked = initialValue || false;
         checkbox.dataset.field = fieldKey;
         checkbox.id = `sheetInput-${fieldKey}`;
-        if (changeListener) {
-            checkbox.addEventListener('change', changeListener);
+
+        // Disable checkbox and prevent listener if read-only
+        if (isReadOnly) {
+             checkbox.disabled = true;
+        } else if (changeListener) {
+             checkbox.addEventListener('change', changeListener); // Only add listener if editable
         }
         p.appendChild(checkbox);
 
         const label = document.createElement('label');
         label.htmlFor = `sheetInput-${fieldKey}`;
         label.textContent = ` ${labelText} `;
-        label.style.cursor = 'pointer';
+        label.style.cursor = isReadOnly ? 'default' : 'pointer'; // Adjust cursor
         p.appendChild(label);
 
         const bonusSpan = document.createElement('span');
         bonusSpan.id = `sheetBonus-${fieldKey}`;
         bonusSpan.style.marginLeft = '5px';
-        // Initial calculation will be done by updateAllModalBonuses later
-        p.appendChild(bonusSpan);
-        
+        p.appendChild(bonusSpan); // Bonus calculated later regardless of read-only
+
         const baseAbilitySpan = document.createElement('span');
         baseAbilitySpan.textContent = ` (${baseAbilityKey.substring(0,3).toUpperCase()})`;
         baseAbilitySpan.style.fontSize = '0.8em';
-        baseAbilitySpan.style.color = '#555';
+        baseAbilitySpan.style.color = '#555'; // Consider using CSS var (--text-color-light)
         p.appendChild(baseAbilitySpan);
 
         return p;
     };
 
+    // --- Populate sections using the CORRECTED create functions ---
     // Basic Info
     const basicInfoDiv = document.createElement('div');
     basicInfoDiv.innerHTML = '<h3>Basic Information</h3>';
-    basicInfoDiv.appendChild(createDetailElement('Player Name', sheetData.playerName));
+    basicInfoDiv.appendChild(createDetailElement('Player Name', sheetData.playerName)); // Not editable
     basicInfoDiv.appendChild(createDetailElement('Character Name', sheetData.characterName, true, 'characterName'));
     basicInfoDiv.appendChild(createDetailElement('Class', sheetData.characterClass, true, 'characterClass'));
     basicInfoDiv.appendChild(createDetailElement('Subclass', sheetData.characterSubClass, true, 'characterSubClass'));
@@ -528,7 +551,6 @@ function populateSheetModal(sheetData) {
     combatStatsDiv.appendChild(createDetailElement('Speed', sheetData.characterSpeed, true, 'characterSpeed', 'number'));
     combatStatsDiv.appendChild(createDetailElement('Hit Dice', sheetData.hitDice, true, 'hitDice'));
     combatStatsDiv.appendChild(createDetailElement('Inspiration', sheetData.inspiration, true, 'inspiration', 'number'));
-    // Proficiency Bonus
     combatStatsDiv.appendChild(createDetailElement('Proficiency Bonus', sheetData.ProficiencyBonus, true, 'ProficiencyBonus', 'number', updateAllModalBonuses));
     modalSheetContent.appendChild(combatStatsDiv);
     modalSheetContent.appendChild(document.createElement('hr'));
@@ -549,7 +571,7 @@ function populateSheetModal(sheetData) {
     const savingThrowsDiv = document.createElement('div');
     savingThrowsDiv.innerHTML = '<h3>Saving Throws</h3>';
     const stGrid = document.createElement('div');
-    stGrid.className = 'sheet-grid three-columns'; // Add a class for styling if needed
+    stGrid.className = 'sheet-grid three-columns';
     for (const fieldKey in SAVING_THROW_ABILITY_MAP) {
         const abilityKey = SAVING_THROW_ABILITY_MAP[fieldKey];
         const label = abilityKey.charAt(0).toUpperCase() + abilityKey.slice(1);
@@ -560,12 +582,12 @@ function populateSheetModal(sheetData) {
     savingThrowsDiv.appendChild(stGrid);
     modalSheetContent.appendChild(savingThrowsDiv);
     modalSheetContent.appendChild(document.createElement('hr'));
-    
+
     // Skills
     const skillsDiv = document.createElement('div');
     skillsDiv.innerHTML = '<h3>Skills</h3>';
-    const skillsGrid = document.createElement('div'); // Using a grid for skills
-    skillsGrid.className = 'sheet-grid three-columns'; // Can style this for 2 or 3 columns
+    const skillsGrid = document.createElement('div');
+    skillsGrid.className = 'sheet-grid three-columns';
     SKILLS.forEach(skill => {
         skillsGrid.appendChild(
             createProficiencyElement(skill.label, skill.key, skill.ability, sheetData[skill.key], sheetData.ProficiencyBonus, updateAllModalBonuses)
@@ -573,13 +595,23 @@ function populateSheetModal(sheetData) {
     });
     skillsDiv.appendChild(skillsGrid);
     modalSheetContent.appendChild(skillsDiv);
+    // --- END Populate sections ---
 
-    // Call to set initial calculated bonus values
-    setTimeout(updateAllModalBonuses, 0); // setTimeout to ensure DOM is updated
 
-    if (saveSheetButton) saveSheetButton.style.display = 'inline-block';
+    // --- CORRECTED: Hide Save Button in Read-Only Mode ---
+    if (saveSheetButton) {
+        console.log(`[populateSheetModal] Setting save button display for ${sheetData.playerName}. isReadOnly: ${isReadOnly}. Current display: ${saveSheetButton.style.display}`);
+        saveSheetButton.style.display = isReadOnly ? 'none' : 'inline-block'; // Use the isReadOnly flag
+        console.log(`[populateSheetModal] Save button display *after* setting: ${saveSheetButton.style.display}`);
+    } else {
+         console.error("[populateSheetModal] saveSheetButton element not found!");
+    }
+    // --- END Save Button Logic ---
+
+    // Call to set initial calculated bonus values (runs after DOM is populated)
+    // Run this regardless of read-only status to display correct bonuses
+    setTimeout(updateAllModalBonuses, 0);
 }
-
 
 // Update Save Sheet Button logic
 if (saveSheetButton) {
@@ -629,93 +661,96 @@ if (saveSheetButton) {
 // Listen for updated
 socket.on('character sheet updated', (data) => {
     console.log('Received "character sheet updated":', data);
+
     // Update the global store REGARDLESS of who it is
     if (data.playerName && data.updatedSheet) {
         allCharacterSheets[data.playerName] = data.updatedSheet;
         console.log(`Updated allCharacterSheets for ${data.playerName}`);
+
+        // Update HP in the sidebar list IF it's already rendered
+        if (userListUL) {
+            const nameSpan = userListUL.querySelector(`span[data-username="${data.playerName}"]`);
+            const userLi = nameSpan?.closest('li');
+            if (userLi) {
+                 const hpSpan = userLi.querySelector('.hp-info');
+                 if (hpSpan) {
+                     const hpCurr = data.updatedSheet?.hpCurr ?? '?';
+                     const hpMax = data.updatedSheet?.HpMax ?? '?';
+                     hpSpan.textContent = ` (HP: ${hpCurr}/${hpMax})`;
+                 }
+            }
+        }
     }
+
 
     if (data.playerName === currentAuthenticatedUsername) {
+        // Update the user's own sheet reference
         if (!currentCharacterSheet) currentCharacterSheet = {};
-        // Deep merge might be better if sheet structure is complex, but for flat fields this is fine
+        // Store the old HP *before* updating the sheet object
+        const oldHpForCheck = currentCharacterSheet.hpCurr; // Use this for comparison in quick save only
         Object.assign(currentCharacterSheet, data.updatedSheet);
-
         addMessageToChat(`Your sheet data has been updated.`);
-        // *** Refresh Spellcasting Modal if open ***
-        if (spellsModal.style.display === 'block') {
-            console.log("Spellcasting data updated, refreshing modal.");
-            populateSpellsModal(currentCharacterSheet); // Call the population function
-        }
-        // If the main sheet modal is open, refresh it
-        if (sheetModal.style.display === 'block') {
-            populateSheetModal(currentCharacterSheet);
-        }
-        // If the inventory modal is open and inventory was updated, refresh it
-        if (inventoryModal.style.display === 'block' && data.updatedSheet.inventory) {
-             populateInventoryModal(currentCharacterSheet.inventory || []),currentCharacterSheet;
-        }
-        // *** ADD THIS CHECK ***
-        // If the feats modal is open and feats/traits were updated, refresh it
-        if (featsModal.style.display === 'block' && data.updatedSheet.featsAndTraits) {
-            populateFeatsModal(currentCharacterSheet.featsAndTraits || []);
-        }
-                // *** ADD THIS CHECK ***
-        if (attacksModal.style.display === 'block' && data.updatedSheet.attacks) {
-            populateAttacksModal(currentCharacterSheet.attacks || []);
-        }
-         // *** ADD THIS CHECK (for later) ***
-        if (spellsModal.style.display === 'block' /* && relevant spell data updated */) {
-           // Later: populateSpellsModal(currentCharacterSheet);
-           console.log("Spell data updated, refresh needed (implement populateSpellsModal).");
-        }
-         // *** ADD THIS CHECK (for inventory money - Phase 2) ***
-         if (inventoryModal.style.display === 'block'|| [],currentCharacterSheet) {
-             // Repopulate inventory list AND money fields
-              populateInventoryModal(currentCharacterSheet.inventory || [], currentCharacterSheet); // Pass full sheet
-         }
 
+        // --- ADDED: Update Quick HP display ---
+        if (quickHpCurrentInput && quickHpMaxInput && currentCharacterSheet) {
+            // Update only if the current input value doesn't already match the new sheet value
+            // (prevents overwriting while user might be typing, though 'change' event handles this better)
+             if (parseInt(quickHpCurrentInput.value, 10) !== currentCharacterSheet.hpCurr) {
+                 quickHpCurrentInput.value = currentCharacterSheet.hpCurr ?? 0;
+             }
+             if (parseInt(quickHpMaxInput.value, 10) !== currentCharacterSheet.HpMax) {
+                 quickHpMaxInput.value = currentCharacterSheet.HpMax ?? 0;
+             }
+        }
+        // --- END ADDED ---
+
+        // Refresh relevant open modals for the current user (as before)
+        if (sheetModal.style.display === 'block') { populateSheetModal(currentCharacterSheet); }
+        if (inventoryModal.style.display === 'block') { populateInventoryModal(currentCharacterSheet.inventory || [], currentCharacterSheet); }
+        if (featsModal.style.display === 'block') { populateFeatsModal(currentCharacterSheet.featsAndTraits || []); }
+        if (attacksModal.style.display === 'block') { populateAttacksModal(currentCharacterSheet.attacks || []); }
+        if (spellsModal.style.display === 'block') { populateSpellsModal(currentCharacterSheet); }
 
     } else {
-        // If you store all sheets locally for some reason, update that specific sheet.
         console.log(`Sheet updated for ${data.playerName} (another user).`);
-        // Potentially update a global sheet store if you implement one later
     }
-    updateUserList(Object.keys(allCharacterSheets));
-});
 
+    // No full list update here
+});
 // sidebar helper func
-function updateUserList(users) { // users is an array of usernames
+// Modify updateUserList function in script.js to add a class to the HP span
+function updateUserList(activeUsernames) { // Parameter is explicitly active usernames
     if (!userListUL) return;
 
     userListUL.innerHTML = ''; // Clear the current list
 
-    if (users && users.length > 0) {
+    if (activeUsernames && activeUsernames.length > 0) {
         // Sort users alphabetically, current user first (optional)
-        users.sort((a, b) => {
+        activeUsernames.sort((a, b) => {
             if (a === currentAuthenticatedUsername) return -1;
             if (b === currentAuthenticatedUsername) return 1;
             return a.localeCompare(b);
         });
 
-        users.forEach(username => {
+        activeUsernames.forEach(username => {
             const li = document.createElement('li');
-            const userSheet = allCharacterSheets[username]; // Get sheet from store
-            const hpCurr = userSheet?.hpCurr ?? '?'; // Use ?? for nullish coalescing
+            // Get sheet data ONLY for the currently active user
+            const userSheet = allCharacterSheets[username];
+            const hpCurr = userSheet?.hpCurr ?? '?';
             const hpMax = userSheet?.HpMax ?? '?';
 
-            // Create a clickable element (<a> or <span>)
-            const nameSpan = document.createElement('span'); // Using span for simpler styling/no href
+            const nameSpan = document.createElement('span');
             nameSpan.textContent = username;
             nameSpan.style.cursor = 'pointer';
             nameSpan.style.textDecoration = 'underline';
-            nameSpan.style.color = 'var(--link-color)'; // Use CSS variable
-            nameSpan.dataset.username = username; // Store username for click handler
+            nameSpan.style.color = 'var(--link-color)';
+            nameSpan.dataset.username = username;
 
-            // Add HP info
             const hpInfo = document.createElement('span');
             hpInfo.textContent = ` (HP: ${hpCurr}/${hpMax})`;
             hpInfo.style.fontSize = '0.9em';
             hpInfo.style.color = 'var(--text-color-light)';
+            hpInfo.classList.add('hp-info'); // <<< ADD CLASS HERE
 
             li.appendChild(nameSpan);
             li.appendChild(hpInfo);
@@ -723,7 +758,7 @@ function updateUserList(users) { // users is an array of usernames
             if (username === currentAuthenticatedUsername) {
                 const youSpan = document.createElement('strong');
                 youSpan.textContent = ' (You)';
-                youSpan.style.color = 'var(--user-list-highlight)'; // Use CSS variable
+                youSpan.style.color = 'var(--user-list-highlight)';
                 li.appendChild(youSpan);
             }
             userListUL.appendChild(li);
@@ -734,24 +769,38 @@ function updateUserList(users) { // users is an array of usernames
         userListUL.appendChild(li);
     }
 }
+
 if (userListUL) {
     userListUL.addEventListener('click', (event) => {
-        // Check if the clicked element or its parent has the 'data-username' attribute
         let targetElement = event.target;
-        while (targetElement != null && !targetElement.dataset.username) {
-            // Check parent if current element isn't the one with data-username (e.g., clicked the HP span)
-            if(targetElement.parentElement === userListUL) break; // Stop if we reach the list itself
+        // Traverse up to find the element with data-username, stopping at the list container
+        while (targetElement != null && targetElement !== userListUL && !targetElement.dataset.username) {
             targetElement = targetElement.parentElement;
         }
 
-        if (targetElement && targetElement.dataset.username) {
+        // Ensure we found an element with username and it's not the list itself
+        if (targetElement && targetElement !== userListUL && targetElement.dataset.username) {
             const usernameToView = targetElement.dataset.username;
-            console.log(`Clicked to view sheet for: ${usernameToView}`);
-            openSheetForViewing(usernameToView);
+
+            // Prevent default if it was an <a> tag (though we use <span> now)
+            event.preventDefault();
+            event.stopPropagation(); // Stop click from bubbling up to the document listener immediately
+
+            console.log(`Clicked name: ${usernameToView}. Creating options menu.`);
+            // Call the function to create the menu
+            createViewOptionsMenu(usernameToView, event); // Pass the event for positioning
+
+        } else {
+            // If the click was not on a name span (e.g., whitespace, HP info),
+            // remove any existing menu explicitly. The document listener might also catch this.
+            const existingMenu = document.getElementById('viewOptionsMenu');
+            if (existingMenu) {
+                 console.log("Clicked in list but not on name, removing menu.");
+                 existingMenu.remove();
+            }
         }
     });
 }
-
 // listen for user list updates from server
 socket.on('update user list', (userArray) => { // userArray is expected to be an array of usernames
     console.log('Received "update user list":', userArray);
@@ -2258,4 +2307,189 @@ function openSheetForViewing(username) {
     // 5. Spellcasting Modal
     populateSpellsModal(sheetToView, true);
     spellsModal.style.display = 'block'; // Open spells modal too
+}
+// --- NEW: Function to create and show the view options menu ---
+function createViewOptionsMenu(username, event) {
+    const sheetToView = allCharacterSheets[username];
+    if (!sheetToView) {
+        addMessageToChat(`Error: Could not find sheet data for ${username}.`);
+        return;
+    }
+
+    // Remove any existing menu first
+    const existingMenu = document.getElementById('viewOptionsMenu');
+    if (existingMenu) {
+        existingMenu.remove();
+    }
+
+    // Create the menu container
+    const menuDiv = document.createElement('div');
+    menuDiv.id = 'viewOptionsMenu';
+    menuDiv.className = 'view-options-menu';
+
+    // Define the options
+    const options = [
+        { label: "Sheet", modalId: "sheetModal", populateFn: populateSheetModal, needsFullSheet: true },
+        { label: "Inventory", modalId: "inventoryModal", populateFn: populateInventoryModal, needsFullSheet: true }, // needs full sheet for money
+        { label: "Feats & Traits", modalId: "featsModal", populateFn: populateFeatsModal, needsFeatsArray: true },
+        { label: "Attacks", modalId: "attacksModal", populateFn: populateAttacksModal, needsAttacksArray: true },
+        { label: "Spells", modalId: "spellsModal", populateFn: populateSpellsModal, needsFullSheet: true }
+    ];
+
+    // Create buttons for each option
+    options.forEach(option => {
+        const button = document.createElement('button');
+        button.textContent = `View ${option.label}`;
+        button.type = 'button';
+
+        button.addEventListener('click', () => {
+            console.log(`Selected view '${option.label}' for ${username}`);
+            // Determine what data to pass based on the option definition
+            let dataToPass;
+            if (option.needsFullSheet) {
+                dataToPass = sheetToView;
+            } else if (option.needsInventoryArray) {
+                dataToPass = sheetToView.inventory || [];
+            } else if (option.needsFeatsArray) {
+                 dataToPass = sheetToView.featsAndTraits || [];
+            } else if (option.needsAttacksArray) {
+                 dataToPass = sheetToView.attacks || [];
+            }
+             // Add other specific data needs if required
+
+            // Call the appropriate populate function with data and read-only flag
+            if (option.label === "Inventory") { // Inventory needs special handling for sheetData
+                 option.populateFn(sheetToView.inventory || [], sheetToView, true);
+            } else {
+                 option.populateFn(dataToPass, true);
+            }
+
+
+            // Show the corresponding modal
+            const modalElement = document.getElementById(option.modalId);
+            if (modalElement) {
+                modalElement.style.display = 'block';
+            } else {
+                console.error(`Modal element with ID ${option.modalId} not found!`);
+            }
+
+            // Close the menu
+            menuDiv.remove();
+        });
+
+        menuDiv.appendChild(button);
+    });
+
+    // Position the menu near the click event
+    // Append to body first to calculate dimensions if needed, then position
+    document.body.appendChild(menuDiv);
+
+    // Basic positioning - adjust as needed
+    const menuRect = menuDiv.getBoundingClientRect();
+    let top = event.pageY;
+    let left = event.pageX;
+
+    // Prevent menu going off-screen (simple example)
+    if (left + menuRect.width > window.innerWidth) {
+        left = window.innerWidth - menuRect.width - 10; // Add some padding
+    }
+    if (top + menuRect.height > window.innerHeight) {
+        top = window.innerHeight - menuRect.height - 10;
+    }
+     if (left < 0) left = 5;
+     if (top < 0) top = 5;
+
+
+    menuDiv.style.top = `${top}px`;
+    menuDiv.style.left = `${left}px`;
+
+    // Add listener to close menu if clicking elsewhere
+    // Use setTimeout to prevent immediate closing by the same click that opened it
+    setTimeout(() => {
+        document.addEventListener('click', closeMenuOnClickOutside, { capture: true, once: true });
+    }, 0);
+}
+
+// --- NEW: Helper function to close the menu ---
+function closeMenuOnClickOutside(event) {
+    const menu = document.getElementById('viewOptionsMenu');
+    // Check if the click was outside the menu and not on a user list name span
+    if (menu && !menu.contains(event.target)) {
+         // Also check if the click was on a name span itself, in which case the main handler will remove the old menu anyway
+         let targetElement = event.target;
+         let clickedOnName = false;
+         while (targetElement != null && targetElement !== document.body) {
+             if (targetElement.dataset && targetElement.dataset.username) {
+                 clickedOnName = true;
+                 break;
+             }
+             // Stop if we hit the user list itself without finding a name span
+             if (targetElement === userListUL) break;
+             targetElement = targetElement.parentElement;
+         }
+
+         if (!clickedOnName) {
+             console.log("Clicked outside menu, removing.");
+             menu.remove();
+         } else {
+              console.log("Clicked on a name, main handler will manage menu.");
+         }
+
+    } else if (menu && menu.contains(event.target)) {
+        // Click was inside the menu, need to re-add the listener if the menu wasn't closed by a button click
+        // Check if the menu *still* exists (it might have been removed by a button click)
+         const menuStillExists = document.getElementById('viewOptionsMenu');
+         if(menuStillExists) {
+             console.log("Clicked inside menu, re-adding close listener.");
+             document.addEventListener('click', closeMenuOnClickOutside, { capture: true, once: true });
+         }
+    }
+    // Note: The 'capture: true' helps catch the click before it might be stopped by other elements.
+    // 'once: true' automatically removes the listener after it fires once.
+}
+// --- ADDED: Listener for Quick HP Input Changes ---
+if (quickHpCurrentInput) {
+    quickHpCurrentInput.addEventListener('change', (event) => { // Use 'change' event
+        if (!currentCharacterSheet || !currentAuthenticatedUsername) {
+            console.warn("Cannot save quick HP: User/Sheet not ready.");
+            return; // Not logged in or sheet not loaded
+        }
+
+        const newValueStr = event.target.value;
+        const newHpValue = parseInt(newValueStr, 10);
+
+        // Validate the input
+        if (isNaN(newHpValue) || newHpValue < 0) {
+            console.warn("Invalid HP value entered:", newValueStr);
+            // Optionally revert to the stored value
+            event.target.value = currentCharacterSheet.hpCurr ?? 0;
+            addMessageToChat("Error: Invalid HP value entered.", "error"); // Add error class if you have one
+            return;
+        }
+
+        // Compare with the *current* value in our character sheet object
+        const oldHpValue = currentCharacterSheet.hpCurr;
+
+        // Only save if the value actually changed
+        if (newHpValue !== oldHpValue) {
+            console.log(`Quick HP changed from ${oldHpValue} to ${newHpValue}. Saving...`);
+            const updatePayload = {
+                sheetUpdates: {
+                    hpCurr: newHpValue // Send only the HP update
+                }
+            };
+            socket.emit('update character sheet', updatePayload);
+            // Do NOT update currentCharacterSheet here. Wait for server confirmation.
+            // The server will send back 'character sheet updated', which updates the display.
+        } else {
+             console.log("Quick HP value submitted but not changed from stored value. No save needed.");
+             // Ensure the input reflects the stored value if they typed something invalid then blurred
+              event.target.value = oldHpValue ?? 0;
+        }
+    });
+
+     // Optional: Prevent non-numeric characters (more aggressive)
+     quickHpCurrentInput.addEventListener('input', (event) => {
+         event.target.value = event.target.value.replace(/[^0-9]/g, '');
+     });
 }

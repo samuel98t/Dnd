@@ -35,7 +35,18 @@
         <div id="left-column"> <!-- First Column -->
             <div id="character-sheet-area">
                 <h2>Character Sheet</h2>
-                <p> Player Name: <input type="text" id="playerName" placeholder="Your Name" readonly></p>
+                <!-- Modified Player Name / HP Section -->
+                <div class="player-info-line">
+                     <label for="playerName">Player:</label>
+                     <input type="text" id="playerName" placeholder="Your Name" readonly>
+                </div>
+                <div class="player-info-line" id="quick-hp-display">  <!-- NEW HP Display -->
+                    <label for="quickHpCurrent">HP:</label>
+                    <input type="number" id="quickHpCurrent" min="0" title="Current Hit Points (Editable)">
+                    <span>/</span>
+                    <input type="number" id="quickHpMax" readonly title="Maximum Hit Points (Edit in full sheet)"> <!-- Max HP is read-only here -->
+                </div>
+                 <!-- End Modified Section -->
                 <button id="openSheetButton">View Character Sheet</button>
                 <button id="openInventoryButton" style="margin-top: 10px;">Manage Inventory</button>
                 <button id="openFeatsButton" style="margin-top: 10px;">Feats & Traits</button>

@@ -1131,3 +1131,86 @@ body.dark-mode .spell-row textarea {
     text-overflow: ellipsis;
     /* Inherits base button styles for colors/hover */
 }
+
+/* Style for the dynamic view options menu */
+.view-options-menu {
+    position: absolute; /* Position relative to the viewport initially */
+    z-index: 1050;      /* Ensure it's above most other elements */
+    display: block;     /* Will be shown via JS */
+    background-color: var(--container-bg); /* Use theme background */
+    border: 1px solid var(--container-border);
+    border-radius: 4px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    padding: 5px;
+    min-width: 150px;
+}
+
+.view-options-menu button {
+    display: block;     /* Each option on its own line */
+    width: 100%;
+    padding: 8px 12px;
+    margin: 2px 0;
+    text-align: left;
+    background-color: transparent; /* Clear background */
+    color: var(--text-color);      /* Use theme text color */
+    border: none;
+    cursor: pointer;
+    font-size: 0.9em;
+}
+
+.view-options-menu button:hover {
+    background-color: var(--button-hover-bg); /* Use theme button hover */
+    color: var(--button-text);           /* Use theme button text on hover */
+}
+.player-info-line {
+    display: flex;       /* Arrange label and input/display horizontally */
+    align-items: center; /* Vertically align items in the middle */
+    margin-bottom: 8px;  /* Space below each line */
+    gap: 5px;            /* Space between label and input/display */
+}
+
+.player-info-line label {
+    flex-shrink: 0; /* Prevent label from shrinking */
+    min-width: 50px; /* Give label consistent width (adjust as needed) */
+    font-weight: bold;
+    margin-right: 5px; /* Space after label */
+}
+
+/* Readonly player name input */
+#playerName {
+    flex-grow: 1; /* Allow input to take remaining space */
+    margin-bottom: 0; /* Override default input margin */
+    background-color: var(--nested-container-bg); /* Make it look less like an input */
+    border: none;
+    font-weight: bold;
+    color: var(--text-color-heading);
+    padding: 5px 0; /* Adjust padding */
+}
+
+/* Quick HP Display Specifics */
+#quick-hp-display input[type="number"] {
+    width: 60px;        /* Fixed small width for HP numbers */
+    padding: 4px;
+    text-align: center;
+    margin-bottom: 0;   /* Override default input margin */
+    font-size: 0.95em;
+}
+
+/* Readonly Max HP Input */
+#quickHpMax {
+    background-color: var(--nested-container-bg); /* Match readonly look */
+    border: 1px solid transparent; /* Subtle border or none */
+    color: var(--text-color-light); /* Dim the max HP slightly */
+}
+
+/* Remove spinners from HP inputs (optional) */
+#quick-hp-display input[type=number]::-webkit-outer-spin-button,
+#quick-hp-display input[type=number]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+#quick-hp-display span { /* Style the "/" separator */
+    margin: 0 3px;
+    font-weight: bold;
+}

@@ -322,7 +322,17 @@ io.on('connection',(socket)=>{
             }
 
             console.log(`[Update Sheet - ${username}] Received updates for keys:`, Object.keys(data.sheetUpdates));
-
+                        let oldHp = undefined;
+            let newHp = undefined;
+            let hpChanged = false;
+            if (data.sheetUpdates.hasOwnProperty('hpCurr')) {
+                 oldHp = typeof sheet.hpCurr === 'number' ? sheet.hpCurr : undefined;
+                const incomingHp = parseFloat(data.sheetUpdates.hpCurr);
+                 newHp = !isNaN(incomingHp) ? incomingHp : undefined;
+                 if (typeof oldHp === 'number' && typeof newHp === 'number' && oldHp !== newHp) {
+                    hpChanged = true;
+                 }
+            }
             // --- FINAL REVISED UPDATE LOGIC ---
             for (const key in data.sheetUpdates) {
                 // --- ADDED LOG: Show key and value ---
@@ -386,6 +396,30 @@ io.on('connection',(socket)=>{
             console.log(`[Update Sheet - ${username}] Sheet object BEFORE save:`, sheet.toObject()); // Use toObject() for cleaner log
 
             await sheet.save(); // Mongoose performs validation here
+                        // --- ADD: Emit HP Change Message AFTER Save ---
+            if (hpChanged && typeof oldHp === 'number' && typeof newHp === 'number') {
+                let chatMessageText = "";
+                const difference = Math.abs(newHp - oldHp); // Calculate absolute difference
+
+                if (newHp < oldHp) {
+                    chatMessageText = `${username} took ${difference} damage (now ${newHp} HP).`;
+                } else { // newHp > oldHp
+                    chatMessageText = `${username} healed for ${difference} HP (now ${newHp} HP).`;
+                }
+
+                 if (chatMessageText) {
+                    const messagePayload = {
+                         sender: 'System', // Or username? Decide who announces it.
+                         text: chatMessageText,
+                         timestamp: new Date().toLocaleTimeString(),
+                         // type: 'system' // Keep as system or specific type?
+                    };
+                    io.emit('server message', messagePayload); // Broadcast to everyone
+                    chatHistory.push({ type: 'chat', ...messagePayload }); // Use 'chat' type for history
+                    if (chatHistory.length > 50) chatHistory.shift();
+                    console.log(`[HP Change] Emitted: ${chatMessageText}`);
+                 }
+            }
 
             console.log(`[Update Sheet - ${username}] Sheet saved successfully.`);
 
