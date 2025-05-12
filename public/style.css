@@ -271,3 +271,55 @@ button:hover {
     border: none; border-radius: 4px; cursor: pointer; margin-top: 5px;
 }
 #add-inventory-item-btn:hover { background-color: #218838; }
+.sheet-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 10px; /* Reduced gap slightly */
+}
+
+.sheet-grid.three-columns { /* New style for ST and Skills */
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); /* Adjust minmax for 3 columns */
+    gap: 8px;
+}
+
+
+#modalSheetContent p {
+    margin-bottom: 6px; /* Slightly reduced margin */
+    line-height: 1.5;
+}
+#modalSheetContent p strong {
+    display: inline-block;
+    min-width: 140px; /* Adjusted min-width */
+}
+
+/* Style for proficiency elements */
+#modalSheetContent input[type="checkbox"] {
+    margin-right: 5px;
+    vertical-align: middle;
+}
+#modalSheetContent label { /* Labels next to checkboxes */
+    vertical-align: middle;
+}
+
+#modalSheetContent .sheet-grid p,
+#modalSheetContent .sheet-grid.three-columns p {
+    display: flex; /* Helps align checkbox, label, bonus nicely */
+    align-items: center;
+    margin-bottom: 4px;
+}
+#modalSheetContent .sheet-grid p strong, /* For ability scores */
+#modalSheetContent .sheet-grid.three-columns p label { /* For ST/Skill labels */
+    min-width: auto; /* Override general strong min-width */
+    margin-right: 5px;
+}
+#modalSheetContent .sheet-grid.three-columns p input[type="checkbox"]{
+    flex-shrink: 0;
+}
+#modalSheetContent .sheet-grid.three-columns p label {
+    flex-grow: 1;
+}
+#modalSheetContent .sheet-grid.three-columns p span { /* Bonus and ability hint */
+    margin-left: auto; /* Push bonus and hint to the right */
+    padding-left: 5px; /* Space before bonus */
+    flex-shrink: 0;
+}

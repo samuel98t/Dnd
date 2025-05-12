@@ -51,8 +51,8 @@ const characterSheetSchema = new mongoose.Schema({
     hpCurr:{type:Number},
     characterRace:{type:String},
     characterArmor:{type:Number},
-    ProficiencyBonus:{type:String},
-    Initative:{type:Number},
+    ProficiencyBonus:{type:Number,default: 2},
+    Initiative:{type:Number},
     characterSpeed:{type:Number},
     hitDice:{type:String},
     inspiration:{type:Number},
@@ -62,7 +62,34 @@ const characterSheetSchema = new mongoose.Schema({
     intelligence:{type:Number},
     wisdom:{type:Number},
     charisma:{type:Number},
-        inventory: { // THIS FIELD MUST EXIST
+
+    // Saving Throws Proficiencies 
+    savingStrengthProficient: {type: Boolean, default: false},
+    savingDexterityProficient: {type: Boolean, default: false},
+    savingConstitutionProficient: {type: Boolean, default: false},
+    savingIntelligenceProficient: {type: Boolean, default: false},
+    savingWisdomProficient: {type: Boolean, default: false},
+    savingCharismaProficient: {type: Boolean, default: false},
+    // Skill Proficiencies (NEW)
+    skillAcrobaticsProficient: {type: Boolean, default: false},    // Dex
+    skillAnimalHandlingProficient: {type: Boolean, default: false},// Wis
+    skillArcanaProficient: {type: Boolean, default: false},        // Int
+    skillAthleticsProficient: {type: Boolean, default: false},     // Str
+    skillDeceptionProficient: {type: Boolean, default: false},     // Cha
+    skillHistoryProficient: {type: Boolean, default: false},       // Int
+    skillInsightProficient: {type: Boolean, default: false},       // Wis
+    skillIntimidationProficient: {type: Boolean, default: false},  // Cha
+    skillInvestigationProficient: {type: Boolean, default: false}, // Int
+    skillMedicineProficient: {type: Boolean, default: false},      // Wis
+    skillNatureProficient: {type: Boolean, default: false},        // Int
+    skillPerceptionProficient: {type: Boolean, default: false},    // Wis
+    skillPerformanceProficient: {type: Boolean, default: false},   // Cha
+    skillPersuasionProficient: {type: Boolean, default: false},    // Cha
+    skillReligionProficient: {type: Boolean, default: false},      // Int
+    skillSleightOfHandProficient: {type: Boolean, default: false}, // Dex
+    skillStealthProficient: {type: Boolean, default: false},       // Dex
+    skillSurvivalProficient: {type: Boolean, default: false},      // Wis
+        inventory: { 
         type: [{
             name: { type: String, required: true, trim: true },
             quantity: { type: Number, default: 1, min: 0 },

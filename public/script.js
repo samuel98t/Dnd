@@ -32,6 +32,37 @@ const inventoryModal = document.getElementById('inventoryModal');
 const closeInventoryModalButton = document.getElementById('closeInventoryModal');
 const modalInventoryContent = document.getElementById('modalInventoryContent');
 const saveInventoryButton = document.getElementById('saveInventoryButton');
+// CONSTANTS for Character Sheet ---
+const ABILITIES_KEYS = ['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'];
+const SAVING_THROW_ABILITY_MAP = {
+    savingStrengthProficient: 'strength',
+    savingDexterityProficient: 'dexterity',
+    savingConstitutionProficient: 'constitution',
+    savingIntelligenceProficient: 'intelligence',
+    savingWisdomProficient: 'wisdom',
+    savingCharismaProficient: 'charisma',
+};
+// Skills
+const SKILLS = [
+    { key: 'skillAthleticsProficient', label: 'Athletics', ability: 'strength' },
+    { key: 'skillAcrobaticsProficient', label: 'Acrobatics', ability: 'dexterity' },
+    { key: 'skillSleightOfHandProficient', label: 'Sleight of Hand', ability: 'dexterity' },
+    { key: 'skillStealthProficient', label: 'Stealth', ability: 'dexterity' },
+    { key: 'skillArcanaProficient', label: 'Arcana', ability: 'intelligence' },
+    { key: 'skillHistoryProficient', label: 'History', ability: 'intelligence' },
+    { key: 'skillInvestigationProficient', label: 'Investigation', ability: 'intelligence' },
+    { key: 'skillNatureProficient', label: 'Nature', ability: 'intelligence' },
+    { key: 'skillReligionProficient', label: 'Religion', ability: 'intelligence' },
+    { key: 'skillAnimalHandlingProficient', label: 'Animal Handling', ability: 'wisdom' },
+    { key: 'skillInsightProficient', label: 'Insight', ability: 'wisdom' },
+    { key: 'skillMedicineProficient', label: 'Medicine', ability: 'wisdom' },
+    { key: 'skillPerceptionProficient', label: 'Perception', ability: 'wisdom' },
+    { key: 'skillSurvivalProficient', label: 'Survival', ability: 'wisdom' },
+    { key: 'skillDeceptionProficient', label: 'Deception', ability: 'charisma' },
+    { key: 'skillIntimidationProficient', label: 'Intimidation', ability: 'charisma' },
+    { key: 'skillPerformanceProficient', label: 'Performance', ability: 'charisma' },
+    { key: 'skillPersuasionProficient', label: 'Persuasion', ability: 'charisma' },
+];
 // Get sidebar
 const userListUL = document.getElementById('user-list');
 // Connection Test
@@ -239,7 +270,7 @@ function populateSheetModal(sheetData) {
 
     modalSheetContent.innerHTML = ''; // Clear previous content
 
-    const createDetailElement = (label, value, isEditable = false, fieldKey = null, inputTypeOverride = null) => {
+    const createDetailElement = (label, value, isEditable = false, fieldKey = null, inputTypeOverride = null, changeListener = null) => {
         const p = document.createElement('p');
         const strong = document.createElement('strong');
         strong.textContent = `${label}: `;
@@ -249,28 +280,30 @@ function populateSheetModal(sheetData) {
             const input = document.createElement('input');
             if (inputTypeOverride) {
                 input.type = inputTypeOverride;
-            } else if (typeof value === 'number' || ['hpCurr', 'HpMax', 'characterLevel', 'strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma', 'inspiration', 'characterArmor', 'Initative', 'characterSpeed'].includes(fieldKey)) {
+            } else if (typeof value === 'number' || ['hpCurr', 'HpMax', 'characterLevel', 'strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma', 'inspiration', 'characterArmor', 'Initiative', /* ProficiencyBonus handled below */ 'characterSpeed'].includes(fieldKey) || fieldKey === 'ProficiencyBonus') {
                 input.type = 'number';
             } else {
                 input.type = 'text';
             }
-            input.value = value || (input.type === 'number' ? 0 : ''); // Default to 0 for numbers
+            input.value = value !== undefined && value !== null ? value : (input.type === 'number' ? 0 : '');
             input.dataset.field = fieldKey;
             input.id = `sheetInput-${fieldKey}`;
             p.appendChild(input);
 
-            // If it's an ability score, add a span for its dynamic modifier
+            if (changeListener) {
+                input.addEventListener('input', changeListener);
+            }
+
             const abilityScores = ['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'];
             if (abilityScores.includes(fieldKey)) {
                 const modSpan = document.createElement('span');
                 modSpan.id = `sheetMod-${fieldKey}`;
                 modSpan.textContent = ` (Mod: ${calculateModifier(input.value)})`;
-                modSpan.style.marginLeft = '10px'; // Some spacing
+                modSpan.style.marginLeft = '10px';
                 p.appendChild(modSpan);
-
-                // Add event listener to update modifier dynamically
-                input.addEventListener('input', (event) => {
+                input.addEventListener('input', (event) => { // Listener for ability score input
                     modSpan.textContent = ` (Mod: ${calculateModifier(event.target.value)})`;
+                    updateAllModalBonuses(); // Recalculate dependent bonuses
                 });
             }
         } else {
@@ -279,7 +312,41 @@ function populateSheetModal(sheetData) {
         return p;
     };
 
-    //  Basic Info Section 
+    const createProficiencyElement = (labelText, fieldKey, baseAbilityKey, initialValue, proficiencyBonus, changeListener) => {
+        const p = document.createElement('p');
+        
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.checked = initialValue || false;
+        checkbox.dataset.field = fieldKey;
+        checkbox.id = `sheetInput-${fieldKey}`;
+        if (changeListener) {
+            checkbox.addEventListener('change', changeListener);
+        }
+        p.appendChild(checkbox);
+
+        const label = document.createElement('label');
+        label.htmlFor = `sheetInput-${fieldKey}`;
+        label.textContent = ` ${labelText} `;
+        label.style.cursor = 'pointer';
+        p.appendChild(label);
+
+        const bonusSpan = document.createElement('span');
+        bonusSpan.id = `sheetBonus-${fieldKey}`;
+        bonusSpan.style.marginLeft = '5px';
+        // Initial calculation will be done by updateAllModalBonuses later
+        p.appendChild(bonusSpan);
+        
+        const baseAbilitySpan = document.createElement('span');
+        baseAbilitySpan.textContent = ` (${baseAbilityKey.substring(0,3).toUpperCase()})`;
+        baseAbilitySpan.style.fontSize = '0.8em';
+        baseAbilitySpan.style.color = '#555';
+        p.appendChild(baseAbilitySpan);
+
+        return p;
+    };
+
+    // Basic Info
     const basicInfoDiv = document.createElement('div');
     basicInfoDiv.innerHTML = '<h3>Basic Information</h3>';
     basicInfoDiv.appendChild(createDetailElement('Player Name', sheetData.playerName));
@@ -291,82 +358,111 @@ function populateSheetModal(sheetData) {
     basicInfoDiv.appendChild(createDetailElement('Background', sheetData.characterBackground, true, 'characterBackground'));
     basicInfoDiv.appendChild(createDetailElement('Alignment', sheetData.characterAlignment, true, 'characterAlignment'));
     modalSheetContent.appendChild(basicInfoDiv);
-
     modalSheetContent.appendChild(document.createElement('hr'));
 
-    // --- Combat Stats Section ---
+    // Combat Stats
     const combatStatsDiv = document.createElement('div');
     combatStatsDiv.innerHTML = '<h3>Combat Stats</h3>';
     combatStatsDiv.appendChild(createDetailElement('Current HP', sheetData.hpCurr, true, 'hpCurr', 'number'));
     combatStatsDiv.appendChild(createDetailElement('Max HP', sheetData.HpMax, true, 'HpMax', 'number'));
     combatStatsDiv.appendChild(createDetailElement('Armor Class', sheetData.characterArmor, true, 'characterArmor', 'number'));
-    combatStatsDiv.appendChild(createDetailElement('Initiative', sheetData.Initative, true, 'Initative', 'number')); // Note: Initiative is often DEX mod + prof (if applicable) + other bonuses. For now, a direct input.
+    combatStatsDiv.appendChild(createDetailElement('Initiative', sheetData.Initiative, true, 'Initiative', 'number'));
     combatStatsDiv.appendChild(createDetailElement('Speed', sheetData.characterSpeed, true, 'characterSpeed', 'number'));
     combatStatsDiv.appendChild(createDetailElement('Hit Dice', sheetData.hitDice, true, 'hitDice'));
     combatStatsDiv.appendChild(createDetailElement('Inspiration', sheetData.inspiration, true, 'inspiration', 'number'));
+    // Proficiency Bonus
+    combatStatsDiv.appendChild(createDetailElement('Proficiency Bonus', sheetData.ProficiencyBonus, true, 'ProficiencyBonus', 'number', updateAllModalBonuses));
     modalSheetContent.appendChild(combatStatsDiv);
-
     modalSheetContent.appendChild(document.createElement('hr'));
 
-    // Abilities Section 
+    // Abilities
     const abilitiesDiv = document.createElement('div');
     abilitiesDiv.innerHTML = '<h3>Abilities</h3>';
     const abilitiesGrid = document.createElement('div');
     abilitiesGrid.className = 'sheet-grid';
-
-    // For each ability, createDetailElement will  handle adding the dynamic modifier span
-    abilitiesGrid.appendChild(createDetailElement('Strength', sheetData.strength, true, 'strength', 'number'));
-    abilitiesGrid.appendChild(createDetailElement('Dexterity', sheetData.dexterity, true, 'dexterity', 'number'));
-    abilitiesGrid.appendChild(createDetailElement('Constitution', sheetData.constitution, true, 'constitution', 'number'));
-    abilitiesGrid.appendChild(createDetailElement('Intelligence', sheetData.intelligence, true, 'intelligence', 'number'));
-    abilitiesGrid.appendChild(createDetailElement('Wisdom', sheetData.wisdom, true, 'wisdom', 'number'));
-    abilitiesGrid.appendChild(createDetailElement('Charisma', sheetData.charisma, true, 'charisma', 'number'));
-
+    ABILITIES_KEYS.forEach(key => {
+        abilitiesGrid.appendChild(createDetailElement(key.charAt(0).toUpperCase() + key.slice(1), sheetData[key], true, key, 'number'));
+    });
     abilitiesDiv.appendChild(abilitiesGrid);
     modalSheetContent.appendChild(abilitiesDiv);
-
     modalSheetContent.appendChild(document.createElement('hr'));
+
+    // Saving Throws
+    const savingThrowsDiv = document.createElement('div');
+    savingThrowsDiv.innerHTML = '<h3>Saving Throws</h3>';
+    const stGrid = document.createElement('div');
+    stGrid.className = 'sheet-grid three-columns'; // Add a class for styling if needed
+    for (const fieldKey in SAVING_THROW_ABILITY_MAP) {
+        const abilityKey = SAVING_THROW_ABILITY_MAP[fieldKey];
+        const label = abilityKey.charAt(0).toUpperCase() + abilityKey.slice(1);
+        stGrid.appendChild(
+            createProficiencyElement(label, fieldKey, abilityKey, sheetData[fieldKey], sheetData.ProficiencyBonus, updateAllModalBonuses)
+        );
+    }
+    savingThrowsDiv.appendChild(stGrid);
+    modalSheetContent.appendChild(savingThrowsDiv);
+    modalSheetContent.appendChild(document.createElement('hr'));
+    
+    // Skills
+    const skillsDiv = document.createElement('div');
+    skillsDiv.innerHTML = '<h3>Skills</h3>';
+    const skillsGrid = document.createElement('div'); // Using a grid for skills
+    skillsGrid.className = 'sheet-grid three-columns'; // Can style this for 2 or 3 columns
+    SKILLS.forEach(skill => {
+        skillsGrid.appendChild(
+            createProficiencyElement(skill.label, skill.key, skill.ability, sheetData[skill.key], sheetData.ProficiencyBonus, updateAllModalBonuses)
+        );
+    });
+    skillsDiv.appendChild(skillsGrid);
+    modalSheetContent.appendChild(skillsDiv);
+
+    // Call to set initial calculated bonus values
+    setTimeout(updateAllModalBonuses, 0); // setTimeout to ensure DOM is updated
 
     if (saveSheetButton) saveSheetButton.style.display = 'inline-block';
 }
 
-// Save sheet button
+
+// Update Save Sheet Button logic
 if (saveSheetButton) {
     saveSheetButton.addEventListener('click', () => {
         if (!currentCharacterSheet || !currentAuthenticatedUsername) {
-            console.error("Cannot save sheet: User not authenticated or sheet data missing.");
-            addMessageToChat("Error: Cannot save sheet. Please try logging in again.");
+            // ... (error handling) ...
             return;
         }
 
         const updatedSheetData = {};
-        const inputs = modalSheetContent.querySelectorAll('input[data-field]');
-
-        inputs.forEach(currentInput => { 
+        // Text, number inputs
+        const inputs = modalSheetContent.querySelectorAll('input[data-field][type="text"], input[data-field][type="number"]');
+        inputs.forEach(currentInput => {
             const fieldKey = currentInput.dataset.field;
             let value = currentInput.value;
-
-            // Get the original value from the currentCharacterSheet for type comparison
             const originalValue = currentCharacterSheet[fieldKey];
+
             if (currentInput.type === 'number' || (typeof originalValue === 'number' && value.trim() !== '')) {
                 value = parseFloat(value);
                 if (isNaN(value)) {
-                    console.warn(`Invalid number for ${fieldKey}: '${currentInput.value}'. Reverting or defaulting.`);
                     value = (typeof originalValue === 'number' && !isNaN(originalValue)) ? originalValue : 0;
                 }
             }
             updatedSheetData[fieldKey] = value;
         });
 
+        // Checkbox inputs (for proficiencies)
+        const checkboxes = modalSheetContent.querySelectorAll('input[data-field][type="checkbox"]');
+        checkboxes.forEach(checkbox => {
+            const fieldKey = checkbox.dataset.field;
+            updatedSheetData[fieldKey] = checkbox.checked; // Booleans
+        });
+
         console.log("Emitting 'update character sheet' with data:", updatedSheetData);
         socket.emit('update character sheet', {
             sheetUpdates: updatedSheetData
         });
-
         addMessageToChat("Saving character sheet changes...");
-
     });
 }
+
         
     socket.on('sheet update error', (errorData) => {
     console.error('Sheet Update Error:', errorData.message);
@@ -377,25 +473,20 @@ socket.on('character sheet updated', (data) => {
     console.log('Received "character sheet updated":', data);
 
     if (data.playerName === currentAuthenticatedUsername) {
-        if (!currentCharacterSheet) currentCharacterSheet = {}; // Initialize if somehow null
-        for (const key in data.updatedSheet) {
-            if (Object.prototype.hasOwnProperty.call(data.updatedSheet, key)) {
-                currentCharacterSheet[key] = data.updatedSheet[key];
-            }
-        }
+        if (!currentCharacterSheet) currentCharacterSheet = {};
+        // Deep merge might be better if sheet structure is complex, but for flat fields this is fine
+        Object.assign(currentCharacterSheet, data.updatedSheet);
         
-        addMessageToChat(`Sheet data for ${data.playerName} has been updated.`);
+        addMessageToChat(`Your sheet data has been updated.`);
 
-        // If the main sheet modal is open, refresh its content 
         if (sheetModal.style.display === 'block') {
-            populateSheetModal(currentCharacterSheet);
+            populateSheetModal(currentCharacterSheet); // This will re-render and re-attach listeners
         }
-        // If inventory modal is open, refresh its content
-        if (inventoryModal.style.display === 'block') {
-            populateInventoryModal(currentCharacterSheet.inventory || []); // Pass the inventory part
+        if (inventoryModal.style.display === 'block' && data.updatedSheet.inventory) {
+             populateInventoryModal(currentCharacterSheet.inventory || []);
         }
-
     } else {
+        // If you store all sheets locally for some reason, update that specific sheet.
         console.log(`Sheet updated for ${data.playerName} (another user).`);
     }
 });
@@ -568,5 +659,86 @@ if (saveInventoryButton) {
         });
 
         addMessageToChat("Saving inventory changes...");
+    });
+}
+// Helper to get proficiency bonus value 
+function getProficiencyBonusValue(sheetDataOrInput) {
+    let pbVal = 0;
+    if (typeof sheetDataOrInput === 'number') { // If direct value passed
+        pbVal = sheetDataOrInput;
+    } else if (sheetDataOrInput && typeof sheetDataOrInput.value === 'string') { // If it's an input element
+         pbVal = parseInt(sheetDataOrInput.value, 10);
+    } else if (currentCharacterSheet) { // Fallback to currentCharacterSheet
+        pbVal = parseInt(currentCharacterSheet.ProficiencyBonus, 10);
+    }
+    return isNaN(pbVal) ? 0 : pbVal;
+}
+// Helper to get proficiency bonus value (now a number)
+function getProficiencyBonusValue(sheetDataOrInput) {
+    let pbVal = 0;
+    if (typeof sheetDataOrInput === 'number') { // If direct value passed
+        pbVal = sheetDataOrInput;
+    } else if (sheetDataOrInput && typeof sheetDataOrInput.value === 'string') { // If it's an input element
+         pbVal = parseInt(sheetDataOrInput.value, 10);
+    } else if (currentCharacterSheet) { // Fallback to currentCharacterSheet
+        pbVal = parseInt(currentCharacterSheet.ProficiencyBonus, 10);
+    }
+    return isNaN(pbVal) ? 0 : pbVal;
+}
+
+
+// Centralized function to update all calculated bonuses in the modal
+function updateAllModalBonuses() {
+    if (sheetModal.style.display !== 'block') return; // Only run if modal is visible
+
+    const pbInput = document.getElementById('sheetInput-ProficiencyBonus');
+    const currentPB = pbInput ? getProficiencyBonusValue(pbInput) : getProficiencyBonusValue(currentCharacterSheet?.ProficiencyBonus || 2);
+
+    const abilityScoreValues = {};
+    ABILITIES_KEYS.forEach(abilityKey => {
+        const inputEl = document.getElementById(`sheetInput-${abilityKey}`);
+        abilityScoreValues[abilityKey] = inputEl ? parseInt(inputEl.value, 10) : (currentCharacterSheet?.[abilityKey] || 10);
+    });
+
+    // Update Saving Throw Bonuses
+    for (const fieldKey in SAVING_THROW_ABILITY_MAP) {
+        const abilityKey = SAVING_THROW_ABILITY_MAP[fieldKey];
+        const abilityScore = abilityScoreValues[abilityKey];
+        const modifier = calculateModifier(abilityScore);
+
+        const checkbox = document.getElementById(`sheetInput-${fieldKey}`);
+        const isProficient = checkbox ? checkbox.checked : (currentCharacterSheet?.[fieldKey] || false);
+        
+        const bonus = parseInt(modifier) + (isProficient ? currentPB : 0);
+        const bonusDisplay = document.getElementById(`sheetBonus-${fieldKey}`);
+        if (bonusDisplay) {
+            bonusDisplay.textContent = `${bonus >= 0 ? '+' : ''}${bonus}`;
+        }
+    }
+
+    // Update Skill Bonuses
+    SKILLS.forEach(skill => {
+        const abilityKey = skill.ability;
+        const abilityScore = abilityScoreValues[abilityKey];
+        const modifier = calculateModifier(abilityScore);
+
+        const checkbox = document.getElementById(`sheetInput-${skill.key}`);
+        const isProficient = checkbox ? checkbox.checked : (currentCharacterSheet?.[skill.key] || false);
+
+        const bonus = parseInt(modifier) + (isProficient ? currentPB : 0);
+        const bonusDisplay = document.getElementById(`sheetBonus-${skill.key}`);
+        if (bonusDisplay) {
+            bonusDisplay.textContent = `${bonus >= 0 ? '+' : ''}${bonus}`;
+        }
+    });
+     // Update ability modifiers themselves
+    ABILITIES_KEYS.forEach(abilityKey => {
+        const inputEl = document.getElementById(`sheetInput-${abilityKey}`);
+        if (inputEl) {
+            const modSpan = document.getElementById(`sheetMod-${abilityKey}`);
+            if (modSpan) {
+                modSpan.textContent = ` (Mod: ${calculateModifier(inputEl.value)})`;
+            }
+        }
     });
 }
