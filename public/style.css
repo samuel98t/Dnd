@@ -94,17 +94,31 @@ body.dark-mode {
 }
 /* --- End Color Variables --- */
 
-
-html, body {
-    height: 100%;
+html { /* Style HTML separately */
+    height: 100%; /* Often useful for percentage heights below */
     margin: 0;
     padding: 0;
-    font-family: sans-serif;
-    background-color: var(--bg-color);
-    color: var(--text-color);
+    font-family: sans-serif; /* Apply base font here */
     box-sizing: border-box;
-    transition: background-color 0.3s, color 0.3s;
+    /* REMOVE background-color from here if only body should have it */
 }
+body {
+    min-height: 100vh; /* <<< KEY FIX: Ensure body covers viewport height */
+    /* REMOVE height: 100%; */
+    margin: 0; /* Reset margin */
+    padding: 20px; /* KEEP your desired body padding */
+    font-family: sans-serif; /* Inherited, but can be explicit */
+    background-color: var(--bg-color); /* <<< APPLY BACKGROUND HERE */
+    color: var(--text-color);
+    box-sizing: border-box; /* Apply box-sizing */
+    transition: background-color 0.3s, color 0.3s; /* Keep transition */
+
+    /* Keep your flex layout for centering the container */
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
 
 *, *:before, *:after {
     box-sizing: inherit;

@@ -405,20 +405,7 @@ if(closeSheetModalButton){
         sheetModal.style.display='none';
     });
 }
-// Close if user clicks outside it too
-window.addEventListener('click',(event)=>{
-    if(event.target===sheetModal){
-        sheetModal.style.display='none';
-    }
-    if (event.target ===inventoryModal){
-        inventoryModal.style.display='none';
-    }
-    if (event.target === featsModal) {
-        featsModal.style.display = 'none';
-    }
-    if (event.target === attacksModal) attacksModal.style.display = 'none';
-    if (event.target === spellsModal) spellsModal.style.display = 'none';
-});
+
 
 function calculateModifier(score) {
     const numericScore = parseInt(score, 10);
