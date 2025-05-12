@@ -3,6 +3,33 @@ const socket = io();
 let currentUserIsDM = false;
 let currentAuthenticatedUsername = null;
 let currentCharacterSheet = null; // To store the user's sheet
+// Get Attacks Modal Elements
+const openAttacksButton = document.getElementById('openAttacksButton');
+const attacksModal = document.getElementById('attacksModal');
+const closeAttacksModalButton = document.getElementById('closeAttacksModal');
+const modalAttacksContent = document.getElementById('modalAttacksContent');
+const saveAttacksButton = document.getElementById('saveAttacksButton');
+// MONEY
+const moneyCPInput = document.getElementById('moneyCP');
+const moneySPInput = document.getElementById('moneySP');
+const moneyEPInput = document.getElementById('moneyEP');
+const moneyGPInput = document.getElementById('moneyGP');
+const moneyPPInput = document.getElementById('moneyPP');
+// Get Spellcasting Elements 
+const spellClassInput = document.getElementById('spellClass');
+const spellAbilitySelect = document.getElementById('spellAbility');
+const spellSaveDCInput = document.getElementById('spellSaveDC');
+const spellAttackBonusInput = document.getElementById('spellAttackBonus');
+const spellSlotsGrid = document.querySelector('#spell-slots-section .spell-slots-grid'); // Container for slots
+const spellTabsContainer = document.getElementById('spell-tabs');
+const spellTabContentContainer = document.getElementById('spell-tab-content');
+const addSpellButton = document.getElementById('add-spell-btn');
+// Get Spellcasting Modal Elements (for open/close)
+const openSpellsButton = document.getElementById('openSpellsButton');
+const spellsModal = document.getElementById('spellsModal');
+const closeSpellsModalButton = document.getElementById('closeSpellsModal');
+const modalSpellsContent = document.getElementById('modalSpellsContent');
+const saveSpellsButton = document.getElementById('saveSpellsButton');
 // --- GET AUTH ELEMENTS ---
 const authArea = document.getElementById('auth-area');
 const loginUsernameInput = document.getElementById('loginUsername');
@@ -369,6 +396,8 @@ window.addEventListener('click',(event)=>{
     if (event.target === featsModal) {
         featsModal.style.display = 'none';
     }
+    if (event.target === attacksModal) attacksModal.style.display = 'none';
+    if (event.target === spellsModal) spellsModal.style.display = 'none';
 });
 
 function calculateModifier(score) {
@@ -596,7 +625,11 @@ socket.on('character sheet updated', (data) => {
         Object.assign(currentCharacterSheet, data.updatedSheet);
 
         addMessageToChat(`Your sheet data has been updated.`);
-
+        // *** Refresh Spellcasting Modal if open ***
+        if (spellsModal.style.display === 'block') {
+            console.log("Spellcasting data updated, refreshing modal.");
+            populateSpellsModal(currentCharacterSheet); // Call the population function
+        }
         // If the main sheet modal is open, refresh it
         if (sheetModal.style.display === 'block') {
             populateSheetModal(currentCharacterSheet);
@@ -610,6 +643,21 @@ socket.on('character sheet updated', (data) => {
         if (featsModal.style.display === 'block' && data.updatedSheet.featsAndTraits) {
             populateFeatsModal(currentCharacterSheet.featsAndTraits || []);
         }
+                // *** ADD THIS CHECK ***
+        if (attacksModal.style.display === 'block' && data.updatedSheet.attacks) {
+            populateAttacksModal(currentCharacterSheet.attacks || []);
+        }
+         // *** ADD THIS CHECK (for later) ***
+        if (spellsModal.style.display === 'block' /* && relevant spell data updated */) {
+           // Later: populateSpellsModal(currentCharacterSheet);
+           console.log("Spell data updated, refresh needed (implement populateSpellsModal).");
+        }
+         // *** ADD THIS CHECK (for inventory money - Phase 2) ***
+         if (inventoryModal.style.display === 'block') {
+             // Repopulate inventory list AND money fields
+              populateInventoryModal(currentCharacterSheet.inventory || [], currentCharacterSheet); // Pass full sheet
+         }
+
 
     } else {
         // If you store all sheets locally for some reason, update that specific sheet.
@@ -652,7 +700,28 @@ function populateInventoryModal(inventoryDataArray) {
         return;
     }
     modalInventoryContent.innerHTML = '';
+        // *** POPULATE MONEY INPUTS ***
+    const moneyCPInput = document.getElementById('moneyCP');
+    const moneySPInput = document.getElementById('moneySP');
+    const moneyEPInput = document.getElementById('moneyEP');
+    const moneyGPInput = document.getElementById('moneyGP');
+    const moneyPPInput = document.getElementById('moneyPP');
 
+    if (sheetData && moneyCPInput && moneySPInput && moneyEPInput && moneyGPInput && moneyPPInput) {
+        moneyCPInput.value = sheetData.cp || 0;
+        moneySPInput.value = sheetData.sp || 0;
+        moneyEPInput.value = sheetData.ep || 0;
+        moneyGPInput.value = sheetData.gp || 0;
+        moneyPPInput.value = sheetData.pp || 0;
+    } else if (sheetData === null) {
+         // Clear fields if no sheet data (e.g., before login)
+         moneyCPInput.value = 0;
+         moneySPInput.value = 0;
+         moneyEPInput.value = 0;
+         moneyGPInput.value = 0;
+         moneyPPInput.value = 0;
+    }
+    // *** END POPULATE MONEY ***
     const inventoryListContainerDiv = document.createElement('div');
     inventoryListContainerDiv.id = 'inventory-list-display';
 
@@ -778,6 +847,20 @@ if (saveInventoryButton) {
                     description: description
                 });
             }
+        // *** GET MONEY VALUES ***
+        const moneyUpdates = {};
+        const cp = parseInt(document.getElementById('moneyCP')?.value, 10);
+        const sp = parseInt(document.getElementById('moneySP')?.value, 10);
+        const ep = parseInt(document.getElementById('moneyEP')?.value, 10);
+        const gp = parseInt(document.getElementById('moneyGP')?.value, 10);
+        const pp = parseInt(document.getElementById('moneyPP')?.value, 10);
+
+        moneyUpdates.cp = isNaN(cp) ? 0 : cp;
+        moneyUpdates.sp = isNaN(sp) ? 0 : sp;
+        moneyUpdates.ep = isNaN(ep) ? 0 : ep;
+        moneyUpdates.gp = isNaN(gp) ? 0 : gp;
+        moneyUpdates.pp = isNaN(pp) ? 0 : pp;
+        // *** END GET MONEY VALUES ***
         });
 
         console.log("Emitting 'update character sheet' (inventory only) with data:", newInventory);
@@ -785,7 +868,7 @@ if (saveInventoryButton) {
             sheetUpdates: { inventory: newInventory } // Send ONLY the inventory array
         });
 
-        addMessageToChat("Saving inventory changes...");
+        addMessageToChat("Saving Inventory & Currency changes...");
     });
 }
 // Helper to get proficiency bonus value 
@@ -1214,5 +1297,592 @@ if (saveFeatsButton) {
         addMessageToChat("Saving Feats & Traits changes...");
         // Optional: Close modal after save?
         // featsModal.style.display = 'none';
+    });
+}
+// Attacks Modal Control
+if (openAttacksButton) {
+    openAttacksButton.addEventListener('click', () => {
+        if (currentCharacterSheet) {
+            populateAttacksModal(currentCharacterSheet.attacks || []);
+            attacksModal.style.display = 'block';
+        } else {
+            addMessageToChat("Please log in to manage Attacks.");
+        }
+    });
+}
+if (closeAttacksModalButton) {
+    closeAttacksModalButton.addEventListener('click', () => {
+        attacksModal.style.display = 'none';
+    });
+}
+
+// Spellcasting Modal Control (basic open/close for now)
+if (openSpellsButton) {
+    openSpellsButton.addEventListener('click', () => {
+        if (currentCharacterSheet) {
+            populateSpellsModal(currentCharacterSheet); // Pass the full sheet
+            spellsModal.style.display = 'block';
+        } else {
+            addMessageToChat("Please log in to manage Spellcasting.");
+        }
+    });
+}
+if (closeSpellsModalButton) {
+    closeSpellsModalButton.addEventListener('click', () => {
+        spellsModal.style.display = 'none';
+    });
+}
+// Helper function to create a DOM row for a single attack
+function createAttackRowElement(attack = {}) {
+    const itemRowDiv = document.createElement('div');
+    itemRowDiv.className = 'attack-row';
+
+    const nameInput = document.createElement('input');
+    nameInput.type = 'text';
+    nameInput.value = attack.name || '';
+    nameInput.placeholder = "Attack Name";
+    nameInput.className = 'attack-name';
+
+    const bonusInput = document.createElement('input');
+    bonusInput.type = 'text'; // Keep as text to allow "+5" or "+Str" etc.
+    bonusInput.value = attack.attackBonus || '+0';
+    bonusInput.placeholder = "Atk Bonus";
+    bonusInput.className = 'attack-bonus';
+
+    const damageInput = document.createElement('input');
+    damageInput.type = 'text'; // Keep as text for "1d8+3"
+    damageInput.value = attack.damage || '';
+    damageInput.placeholder = "Damage";
+    damageInput.className = 'attack-damage';
+
+    const typeInput = document.createElement('input');
+    typeInput.type = 'text';
+    typeInput.value = attack.damageType || '';
+    typeInput.placeholder = "Type";
+    typeInput.className = 'attack-type';
+
+    const attackButton = document.createElement('button');
+    attackButton.textContent = 'Attack';
+    attackButton.className = 'attack-roll-btn'; // Specific class for attack roll
+    attackButton.type = 'button';
+    attackButton.onclick = () => {
+        handleAttackRoll(nameInput.value, bonusInput.value, damageInput.value);
+    };
+
+    const removeButton = document.createElement('button');
+    removeButton.textContent = 'Remove';
+    removeButton.className = 'remove-item-btn'; // Reuse style
+    removeButton.type = 'button';
+    removeButton.onclick = () => {
+        itemRowDiv.remove();
+    };
+
+    itemRowDiv.appendChild(nameInput);
+    itemRowDiv.appendChild(bonusInput);
+    itemRowDiv.appendChild(damageInput);
+    itemRowDiv.appendChild(typeInput);
+    itemRowDiv.appendChild(attackButton); // Add attack button
+    itemRowDiv.appendChild(removeButton); // Add remove button
+
+    return itemRowDiv;
+}
+
+// Function to populate the Attacks modal content
+function populateAttacksModal(attacksArray) {
+    if (!modalAttacksContent) return;
+    modalAttacksContent.innerHTML = ''; // Clear
+
+    const listContainerDiv = document.createElement('div');
+    listContainerDiv.id = 'attacks-list-display';
+
+    if (attacksArray && Array.isArray(attacksArray) && attacksArray.length > 0) {
+        attacksArray.forEach((item) => {
+            listContainerDiv.appendChild(createAttackRowElement(item));
+        });
+    } else {
+        listContainerDiv.innerHTML = "<p>No attacks defined. Click 'Add New Attack' to start.</p>";
+    }
+    modalAttacksContent.appendChild(listContainerDiv);
+
+    // "Add New Attack" button
+    const addButton = document.createElement('button');
+    addButton.textContent = 'Add New Attack';
+    addButton.type = 'button';
+    addButton.id = 'add-attack-btn'; // Use the new ID
+    addButton.onclick = () => {
+        const noItemsMsg = listContainerDiv.querySelector('p');
+        if (noItemsMsg) noItemsMsg.remove();
+
+        const newItemRow = createAttackRowElement();
+        listContainerDiv.appendChild(newItemRow);
+        newItemRow.querySelector('.attack-name')?.focus(); // Optional chaining
+    };
+    modalAttacksContent.appendChild(addButton);
+
+    if (saveAttacksButton) saveAttacksButton.style.display = 'inline-block';
+}
+// Function to handle the attack and damage rolls when the button is clicked
+function handleAttackRoll(attackName, attackBonusStr, damageStr) {
+    if (!currentCharacterSheet) {
+        addMessageToChat("Error: Character sheet not loaded.");
+        return;
+    }
+    const rollerName = getPlayerName();
+    attackName = attackName || "Attack"; // Default name if empty
+
+    // --- Attack Roll ---
+    // Basic parsing: assumes format like "+5" or "-1" or just "5"
+    // More complex parsing ("+Str+Prof") would require sheet data here.
+    let atkBonusValue = 0;
+    const bonusMatch = attackBonusStr.match(/[+-]?\d+/); // Find first number with optional sign
+    if (bonusMatch) {
+        atkBonusValue = parseInt(bonusMatch[0], 10);
+    }
+    // Ensure bonus is formatted correctly for the dice roller ("+5", "-1", "")
+    const atkBonusStringForRoll = atkBonusValue === 0 ? "" : (atkBonusValue > 0 ? `+${atkBonusValue}` : `${atkBonusValue}`);
+    const attackRollString = `1d20${atkBonusStringForRoll}`;
+
+    socket.emit('dice roll', {
+        rollerName: rollerName,
+        rollString: attackRollString,
+        description: `${attackName}: Attack Roll (${attackRollString})`
+    });
+
+    // --- Damage Roll ---
+    if (damageStr && damageStr.trim() !== '') {
+        // Basic validation: check if it contains 'd' for dice
+        if (damageStr.includes('d') || damageStr.includes('D')) {
+             socket.emit('dice roll', {
+                rollerName: rollerName,
+                rollString: damageStr.trim(), // Send the raw damage string
+                description: `${attackName}: Damage Roll (${damageStr.trim()})`
+            });
+        } else {
+            // If it's not a dice string, maybe just announce it?
+            addMessageToChat(`${rollerName} deals ${damageStr} damage with ${attackName}.`);
+        }
+    } else {
+        addMessageToChat(`${attackName} doesn't specify damage.`);
+    }
+}
+if (saveAttacksButton) {
+    saveAttacksButton.addEventListener('click', () => {
+        if (!currentCharacterSheet || !currentAuthenticatedUsername) {
+            addMessageToChat("Error: Cannot save Attacks. Log in again.");
+            return;
+        }
+
+        const newAttacks = [];
+        const attackRows = modalAttacksContent.querySelectorAll('#attacks-list-display .attack-row');
+
+        attackRows.forEach(row => {
+            const name = row.querySelector('.attack-name')?.value.trim() || '';
+            if (name) { // Only save if there's a name
+                newAttacks.push({
+                    name: name,
+                    attackBonus: row.querySelector('.attack-bonus')?.value.trim() || '+0',
+                    damage: row.querySelector('.attack-damage')?.value.trim() || '',
+                    damageType: row.querySelector('.attack-type')?.value.trim() || ''
+                });
+            }
+        });
+
+        console.log("Emitting 'update character sheet' (Attacks only) with data:", newAttacks);
+        socket.emit('update character sheet', {
+            sheetUpdates: { attacks: newAttacks } // Send ONLY the attacks array
+        });
+
+        addMessageToChat("Saving Attacks changes...");
+        // attacksModal.style.display = 'none'; // Optional: close modal
+    });
+}
+const SPELL_LEVELS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+
+// Populate the entire Spellcasting modal
+function populateSpellsModal(sheetData) {
+    if (!sheetData || !modalSpellsContent) return;
+
+    // Populate Core Info
+    if (spellClassInput) spellClassInput.value = sheetData.spellcastingClass || '';
+    if (spellAbilitySelect) spellAbilitySelect.value = sheetData.spellcastingAbility || '';
+    if (spellSaveDCInput) spellSaveDCInput.value = sheetData.spellSaveDC || 8;
+    if (spellAttackBonusInput) spellAttackBonusInput.value = sheetData.spellAttackBonus || 0;
+
+    // Populate Spell Slots
+    populateSpellSlots(sheetData.spellSlots);
+
+    // Populate Spells List with Tabs
+    populateSpellTabsAndLists(sheetData.spells || []);
+
+    // Activate the first tab (Cantrips) by default
+    activateSpellTab(0); // Show level 0 initially
+
+    if (saveSpellsButton) saveSpellsButton.style.display = 'inline-block';
+}
+
+// Populate the Spell Slots grid
+function populateSpellSlots(spellSlotsData = {}) {
+    if (!spellSlotsGrid) return;
+    // Clear previous slots but keep headers
+    spellSlotsGrid.innerHTML = `
+        <div class="slot-header">Level</div>
+        <div class="slot-header">Total</div>
+        <div class="slot-header">Expended</div>
+    `;
+
+    for (let level = 1; level <= 9; level++) { // Only show slots for 1-9
+        const levelData = spellSlotsData[`level${level}`] || { total: 0, expended: 0 };
+
+        const levelLabel = document.createElement('div');
+        levelLabel.className = 'slot-level-label';
+        levelLabel.textContent = `Level ${level}`;
+
+        const totalInput = document.createElement('input');
+        totalInput.type = 'number';
+        totalInput.id = `spellSlotsTotal-${level}`;
+        totalInput.min = '0';
+        totalInput.value = levelData.total || 0;
+        totalInput.dataset.level = level;
+        totalInput.dataset.type = 'total';
+
+        const expendedInput = document.createElement('input');
+        expendedInput.type = 'number';
+        expendedInput.id = `spellSlotsExpended-${level}`;
+        expendedInput.min = '0';
+        expendedInput.value = levelData.expended || 0;
+        expendedInput.dataset.level = level;
+        expendedInput.dataset.type = 'expended';
+        // Optional: Add listener to prevent expended > total
+        expendedInput.addEventListener('input', (e) => {
+             const currentTotal = parseInt(document.getElementById(`spellSlotsTotal-${level}`)?.value || '0', 10);
+             if (parseInt(e.target.value, 10) > currentTotal) {
+                 e.target.value = currentTotal;
+             }
+             if (parseInt(e.target.value, 10) < 0) {
+                  e.target.value = 0;
+             }
+        });
+         totalInput.addEventListener('input', (e)=>{ // Also update expended if total decreases below it
+             const currentExpendedInput = document.getElementById(`spellSlotsExpended-${level}`);
+             const currentExpended = parseInt(currentExpendedInput?.value || '0', 10);
+             const newTotal = parseInt(e.target.value, 10);
+              if (currentExpended > newTotal) {
+                 currentExpendedInput.value = newTotal >= 0 ? newTotal : 0;
+             }
+              if (newTotal < 0) {
+                  e.target.value = 0;
+              }
+         });
+
+
+        spellSlotsGrid.appendChild(levelLabel);
+        spellSlotsGrid.appendChild(totalInput);
+        spellSlotsGrid.appendChild(expendedInput);
+    }
+}
+
+// Populate Spell Tabs and their initial List containers
+function populateSpellTabsAndLists(spellsArray = []) {
+    if (!spellTabsContainer || !spellTabContentContainer) return;
+
+    spellTabsContainer.innerHTML = '';
+    spellTabContentContainer.innerHTML = '';
+
+    SPELL_LEVELS.forEach(level => {
+        // Create Tab Button
+        const tabButton = document.createElement('button');
+        tabButton.className = 'spell-tab-button';
+        tabButton.textContent = level === 0 ? 'Cantrips' : `Level ${level}`;
+        tabButton.dataset.level = level;
+        tabButton.onclick = () => activateSpellTab(level);
+        spellTabsContainer.appendChild(tabButton);
+
+        // Create Tab Content Pane
+        const tabPane = document.createElement('div');
+        tabPane.className = 'spell-tab-pane';
+        tabPane.id = `spell-tab-pane-${level}`;
+        tabPane.dataset.level = level;
+
+        // Create List Container inside Pane
+        const listContainer = document.createElement('div');
+        listContainer.className = 'spells-list-level';
+        listContainer.id = `spells-list-level-${level}`;
+        listContainer.innerHTML = '<p>No spells defined for this level.</p>'; // Placeholder
+        tabPane.appendChild(listContainer);
+
+        spellTabContentContainer.appendChild(tabPane);
+    });
+
+    // Now distribute existing spells into the correct lists
+    spellsArray.forEach(spell => {
+        const listContainer = document.getElementById(`spells-list-level-${spell.level}`);
+        if (listContainer) {
+            const noSpellsMsg = listContainer.querySelector('p');
+            if (noSpellsMsg) noSpellsMsg.remove(); // Remove placeholder if adding spells
+
+            listContainer.appendChild(createSpellRowElement(spell));
+        }
+    });
+     // Ensure Add Spell button listener is attached (or re-attached)
+     setupAddSpellButton();
+}
+
+
+// Helper to activate a specific spell tab
+function activateSpellTab(levelToShow) {
+    // Deactivate all buttons and panes
+    document.querySelectorAll('.spell-tab-button').forEach(btn => btn.classList.remove('active'));
+    document.querySelectorAll('.spell-tab-pane').forEach(pane => pane.classList.remove('active'));
+
+    // Activate the target button and pane
+    const targetButton = spellTabsContainer.querySelector(`.spell-tab-button[data-level="${levelToShow}"]`);
+    const targetPane = spellTabContentContainer.querySelector(`.spell-tab-pane[data-level="${levelToShow}"]`);
+
+    if (targetButton) targetButton.classList.add('active');
+    if (targetPane) targetPane.classList.add('active');
+}
+
+
+// Create DOM Row for a single spell
+function createSpellRowElement(spell = {}) {
+    const spellRowDiv = document.createElement('div');
+    spellRowDiv.className = 'spell-row';
+    spellRowDiv.dataset.level = spell.level === undefined ? 0 : spell.level; // Store level
+
+    // --- Structure using grid areas ---
+    const prepArea = document.createElement('div');
+    prepArea.className = 'spell-prep';
+    const prepCheckbox = document.createElement('input');
+    prepCheckbox.type = 'checkbox';
+    prepCheckbox.checked = spell.prepared || false;
+    prepCheckbox.title = "Prepared";
+    prepArea.appendChild(prepCheckbox);
+
+    const nameArea = document.createElement('div');
+    nameArea.className = 'spell-name';
+    const nameInput = document.createElement('input');
+    nameInput.type = 'text';
+    nameInput.value = spell.name || '';
+    nameInput.placeholder = "Spell Name";
+    nameArea.appendChild(nameInput);
+
+    const detailsArea = document.createElement('div');
+    detailsArea.className = 'spell-details-grid'; // Container for details
+
+    // Helper to create detail inputs within the grid
+    const createDetailInput = (label, type, value, placeholder, className = '', options = null) => {
+        const wrap = document.createElement('div');
+        const lbl = document.createElement('label');
+        lbl.textContent = label + ':';
+        wrap.appendChild(lbl);
+        let input;
+        if (type === 'select' && options) {
+            input = document.createElement('select');
+            options.forEach(opt => {
+                const optionEl = document.createElement('option');
+                optionEl.value = opt.value;
+                optionEl.textContent = opt.text;
+                if (opt.value == value) optionEl.selected = true; // Use == for type flexibility if needed
+                input.appendChild(optionEl);
+            });
+        } else if (type === 'textarea') {
+             input = document.createElement('textarea');
+             input.rows = 3;
+             input.value = value || '';
+        } else {
+            input = document.createElement('input');
+            input.type = type;
+            input.value = value || (type === 'number' ? 0 : '');
+            if (type === 'number') input.min = 0;
+        }
+        input.placeholder = placeholder;
+        if (className) input.classList.add(className);
+        wrap.appendChild(input);
+        return wrap;
+    };
+
+    // Add detail fields
+    const levelOptions = SPELL_LEVELS.map(l => ({ value: l, text: l === 0 ? 'Cantrip' : `Level ${l}` }));
+    detailsArea.appendChild(createDetailInput('Level', 'select', spell.level, 'Lvl', 'spell-level', levelOptions));
+    detailsArea.appendChild(createDetailInput('School', 'text', spell.school, 'e.g., Evocation', 'spell-school'));
+    detailsArea.appendChild(createDetailInput('Cast Time', 'text', spell.castingTime, 'e.g., 1 Action', 'spell-castingTime'));
+    detailsArea.appendChild(createDetailInput('Range', 'text', spell.range, 'e.g., 60 feet', 'spell-range'));
+    detailsArea.appendChild(createDetailInput('Components', 'text', spell.components, 'V, S, M (cost)', 'spell-components'));
+    detailsArea.appendChild(createDetailInput('Duration', 'text', spell.duration, 'e.g., Instantaneous', 'spell-duration'));
+    detailsArea.appendChild(createDetailInput('Damage/Effect', 'text', spell.damageEffect, 'e.g., 3d6 Fire / Save DC', 'spell-damageEffect'));
+    detailsArea.appendChild(createDetailInput('Description', 'textarea', spell.description, 'Spell details...', 'spell-description'));
+
+
+    const castButtonArea = document.createElement('div');
+    castButtonArea.className = 'spell-cast-button-area';
+    const castButton = document.createElement('button');
+    castButton.textContent = 'Cast';
+    castButton.className = 'cast-spell-btn';
+    castButton.type = 'button';
+    castButton.onclick = () => {
+        handleCastSpell(
+            nameInput.value,
+            detailsArea.querySelector('.spell-level')?.value || 0, // Get level from input
+            detailsArea.querySelector('.spell-damageEffect')?.value || '' // Get damage/effect
+        );
+    };
+    castButtonArea.appendChild(castButton);
+
+    const removeButton = document.createElement('button');
+    removeButton.textContent = 'Remove';
+    removeButton.className = 'remove-item-btn';
+    removeButton.type = 'button';
+    removeButton.onclick = () => { spellRowDiv.remove(); };
+    castButtonArea.appendChild(removeButton); // Place remove below cast
+
+
+    // Append areas to main div
+    spellRowDiv.appendChild(prepArea);
+    spellRowDiv.appendChild(nameArea);
+    spellRowDiv.appendChild(detailsArea);
+    spellRowDiv.appendChild(castButtonArea);
+
+    return spellRowDiv;
+}
+
+// Handle "Add New Spell" button click
+function setupAddSpellButton() {
+    if (addSpellButton) {
+         // Remove previous listener to avoid duplicates if called multiple times
+         addSpellButton.replaceWith(addSpellButton.cloneNode(true));
+         // Re-select the button after cloning
+         const newAddSpellButton = document.getElementById('add-spell-btn');
+
+        newAddSpellButton.onclick = () => {
+            // Find the currently active tab pane
+            const activePane = spellTabContentContainer.querySelector('.spell-tab-pane.active');
+            if (!activePane) {
+                console.warn("No active spell tab found to add spell to.");
+                activateSpellTab(0); // Default to cantrips if none active
+                 const defaultPane = spellTabContentContainer.querySelector('#spell-tab-pane-0');
+                 if(defaultPane) {
+                    const listContainer = defaultPane.querySelector('.spells-list-level');
+                    if(listContainer){
+                        const noSpellsMsg = listContainer.querySelector('p');
+                        if (noSpellsMsg) noSpellsMsg.remove();
+                        const defaultLevel = 0;
+                        const newSpellRow = createSpellRowElement({ level: defaultLevel }); // Set default level
+                        listContainer.appendChild(newSpellRow);
+                        newSpellRow.querySelector('.spell-name input')?.focus();
+                    }
+                 }
+                return;
+            }
+             const listContainer = activePane.querySelector('.spells-list-level');
+             if(listContainer){
+                 const noSpellsMsg = listContainer.querySelector('p');
+                 if (noSpellsMsg) noSpellsMsg.remove();
+
+                 const currentLevel = parseInt(activePane.dataset.level || '0', 10);
+                 const newSpellRow = createSpellRowElement({ level: currentLevel }); // Default to current tab's level
+                 listContainer.appendChild(newSpellRow);
+                 newSpellRow.querySelector('.spell-name input')?.focus();
+             }
+        };
+    }
+}
+
+
+// Handle "Cast" button click
+function handleCastSpell(spellName, spellLevel, damageEffectStr) {
+     if (!currentCharacterSheet) return;
+    const rollerName = getPlayerName();
+    spellName = spellName || "Unnamed Spell";
+    spellLevel = parseInt(spellLevel, 10);
+
+    // Announce the cast
+     let castMessage = `${rollerName} casts ${spellName}`;
+     if (!isNaN(spellLevel) && spellLevel > 0) {
+         castMessage += ` (Level ${spellLevel})`;
+         // Optional: Check/decrement spell slots here or on server
+     } else if (spellLevel === 0) {
+          castMessage += ` (Cantrip)`;
+     }
+     castMessage += `!`;
+     // Send as a chat message (could be a specific event type later)
+     socket.emit('client message', { sender: "System", text: castMessage });
+
+
+    // Roll damage/effect if applicable
+    if (damageEffectStr && damageEffectStr.trim() !== '') {
+        // Simple check: does it contain 'd' or 'D'?
+         const diceRegex = /\d+[dD]\d+/;
+        if (diceRegex.test(damageEffectStr)) {
+            // Attempt to extract only the dice part if mixed with text
+             let rollString = damageEffectStr.match(/(\d+[dD]\d+(?:[+-]\d+)?)/)?.[0] || damageEffectStr.trim(); // Get first dice pattern or whole string
+             socket.emit('dice roll', {
+                rollerName: rollerName,
+                rollString: rollString,
+                description: `${spellName}: Effect/Damage (${damageEffectStr})` // Show original string in desc
+            });
+        } else {
+            // If no dice detected, just add the effect description to chat
+             addMessageToChat(` > Effect: ${damageEffectStr}`);
+        }
+    }
+}
+// Save Spells Button Listener
+if (saveSpellsButton) {
+    saveSpellsButton.addEventListener('click', () => {
+        if (!currentCharacterSheet || !currentAuthenticatedUsername) {
+            addMessageToChat("Error: Cannot save Spells. Log in again.");
+            return;
+        }
+
+        const sheetUpdates = {};
+
+        // 1. Save Core Spellcasting Info
+        sheetUpdates.spellcastingClass = document.getElementById('spellClass')?.value.trim() || '';
+        sheetUpdates.spellcastingAbility = document.getElementById('spellAbility')?.value || '';
+        sheetUpdates.spellSaveDC = parseInt(document.getElementById('spellSaveDC')?.value, 10) || 8;
+        sheetUpdates.spellAttackBonus = parseInt(document.getElementById('spellAttackBonus')?.value, 10) || 0;
+
+        // 2. Save Spell Slots
+        sheetUpdates.spellSlots = {};
+        for (let level = 1; level <= 9; level++) {
+            const total = parseInt(document.getElementById(`spellSlotsTotal-${level}`)?.value, 10);
+            const expended = parseInt(document.getElementById(`spellSlotsExpended-${level}`)?.value, 10);
+            sheetUpdates.spellSlots[`level${level}`] = {
+                total: isNaN(total) ? 0 : total,
+                expended: isNaN(expended) ? 0 : expended
+            };
+        }
+         // Add level 0 structure if needed by schema default (usually empty)
+         sheetUpdates.spellSlots.level0 = { total: 0, expended: 0 };
+
+
+        // 3. Save Spells List (Collect from ALL tabs)
+        sheetUpdates.spells = [];
+        const spellRows = modalSpellsContent.querySelectorAll('.spell-row'); // Get all spell rows
+        spellRows.forEach(row => {
+            const nameInput = row.querySelector('.spell-name input');
+            const name = nameInput?.value.trim();
+            if (name) { // Only save if name exists
+                const spellData = {
+                    name: name,
+                    prepared: row.querySelector('.spell-prep input[type="checkbox"]')?.checked || false,
+                    level: parseInt(row.querySelector('.spell-level')?.value, 10) || 0,
+                    school: row.querySelector('.spell-school')?.value.trim() || '',
+                    castingTime: row.querySelector('.spell-castingTime')?.value.trim() || '',
+                    range: row.querySelector('.spell-range')?.value.trim() || '',
+                    components: row.querySelector('.spell-components')?.value.trim() || '',
+                    duration: row.querySelector('.spell-duration')?.value.trim() || '',
+                    description: row.querySelector('.spell-description')?.value.trim() || '',
+                    damageEffect: row.querySelector('.spell-damageEffect')?.value.trim() || ''
+                };
+                sheetUpdates.spells.push(spellData);
+            }
+        });
+
+        console.log("Emitting 'update character sheet' (Spellcasting) with data:", sheetUpdates);
+        socket.emit('update character sheet', { sheetUpdates: sheetUpdates });
+
+        addMessageToChat("Saving Spellcasting changes...");
+        // spellsModal.style.display = 'none'; // Optional close
     });
 }

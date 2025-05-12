@@ -680,3 +680,404 @@ body.dark-mode .feat-trait-row textarea {
     padding-top: 15px;
     align-self: flex-end;
 }
+#attacksModal .modal-content {
+    max-width: 750px; /* Adjust width */
+    margin: 4% auto;
+    max-height: 88vh;
+}
+#spellsModal .modal-content.wide { /* Style for potentially wider spell modal */
+    max-width: 950px;
+    margin: 3% auto;
+    max-height: 90vh;
+}
+
+
+/* --- Style the attacks list container --- */
+#attacks-list-display {
+    max-height: 500px; /* Adjust */
+    overflow-y: auto;
+    border: 1px solid var(--container-border);
+    padding: 10px;
+    margin-bottom: 10px;
+    background-color: var(--inventory-list-bg);
+    flex-shrink: 1;
+    min-height: 100px;
+}
+
+/* --- Style individual attack rows --- */
+.attack-row {
+    display: flex;
+    flex-wrap: wrap; /* Allow wrapping */
+    gap: 8px;
+    align-items: center; /* Center items vertically */
+    margin-bottom: 8px;
+    padding: 6px 8px;
+    border: 1px solid var(--inventory-row-border);
+    border-radius: 4px;
+    background-color: var(--inventory-row-bg);
+}
+
+.attack-row input[type="text"] {
+    margin-bottom: 0;
+    padding: 6px;
+    border: 1px solid var(--input-border);
+    border-radius: 3px;
+    background-color: var(--input-bg);
+    color: var(--text-color);
+    font-size: 0.9em; /* Slightly smaller font */
+}
+body.dark-mode .attack-row input[type="text"] {
+    background-color: var(--input-bg);
+    color: var(--text-color);
+    border-color: var(--input-border);
+}
+
+
+.attack-name {
+    flex: 2 1 150px; /* Grow=2, Shrink=1, Basis=150px */
+    min-width: 120px;
+}
+.attack-bonus {
+    flex: 1 1 70px;
+    min-width: 60px;
+}
+.attack-damage {
+    flex: 1 1 100px;
+    min-width: 80px;
+}
+.attack-type {
+    flex: 1 1 100px;
+    min-width: 80px;
+}
+
+/* Style the Attack Button */
+.attack-roll-btn {
+    flex: 0 0 auto; /* Don't grow or shrink */
+    padding: 5px 10px;
+    font-size: 0.85em;
+    background-color: var(--button-bg); /* Default button color */
+    color: var(--button-text);
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    margin-left: auto; /* Push to the right if space allows */
+}
+.attack-roll-btn:hover {
+    background-color: var(--button-hover-bg);
+}
+/* Reuse remove button style */
+.attack-row .remove-item-btn {
+     flex: 0 0 auto; /* Don't grow or shrink */
+     /* Styles already defined */
+     margin-left: 5px;
+}
+
+/* Reuse add button style */
+#add-attack-btn {
+    background-color: var(--add-button-bg);
+    color: white;
+    padding: 8px 12px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    margin-top: 5px;
+    align-self: flex-start;
+}
+#add-attack-btn:hover {
+    background-color: var(--add-button-hover-bg);
+}
+
+/* Adjust save button positioning */
+#attacksModal #saveAttacksButton {
+    margin-top: auto; /* Push to bottom */
+    padding-top: 15px;
+    align-self: flex-end; /* Align to right */
+}
+#spellsModal #saveSpellsButton {
+    margin-top: auto;
+    padding-top: 15px;
+    align-self: flex-end;
+}
+/* --- Add styles for the money section --- */
+#money-section {
+    margin-bottom: 15px;
+    padding: 0 10px; /* Add some padding */
+}
+#money-section h4 {
+    margin-bottom: 8px;
+    font-size: 1.1em;
+    border-bottom: 1px solid var(--hr-color);
+    padding-bottom: 4px;
+}
+.currency-inputs {
+    display: flex;
+    flex-wrap: wrap; /* Allow wrapping on small screens */
+    gap: 15px; /* Space between inputs */
+    justify-content: space-between; /* Distribute space */
+}
+.currency-inputs label {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-weight: bold;
+    color: var(--text-color-heading);
+}
+.currency-inputs input[type="number"] {
+    width: 70px; /* Fixed width for currency inputs */
+    padding: 5px;
+    text-align: right;
+    margin-bottom: 0; /* Override default margin */
+    font-size: 0.95em;
+     /* Inherit other input styles */
+    border: 1px solid var(--input-border);
+    background-color: var(--input-bg);
+    color: var(--text-color);
+    border-radius: 3px;
+}
+/* Remove spinners for number inputs (optional) */
+.currency-inputs input[type=number]::-webkit-outer-spin-button,
+.currency-inputs input[type=number]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+
+/* Adjust Inventory Modal overall layout if needed */
+#inventoryModal .modal-content {
+    /* max-height: 85vh; /* Already set */
+     display: flex;
+     flex-direction: column;
+}
+#modalInventoryContent {
+    flex-grow: 1; /* Allow inventory list area to grow */
+    display: flex;
+    flex-direction: column;
+     overflow: hidden; /* Prevent buttons scrolling */
+}
+#inventory-list-display {
+    flex-grow: 1; /* Allow list to take up space */
+    /* max-height: 450px; /* Already set */
+    /* overflow-y: auto; /* Already set */
+}
+/* --- Spellcasting Modal Specific Styles --- */
+#spellsModal .modal-content.wide {
+    /* Width/Height already set */
+    display: flex;
+    flex-direction: column;
+}
+#modalSpellsContent {
+    flex-grow: 1;
+    overflow-y: auto; /* Allow content scrolling */
+    padding-right: 10px; /* Prevent content overlap with scrollbar */
+}
+
+/* Spellcasting Info Section */
+#spellcasting-info-section h4,
+#spell-slots-section h4,
+#spell-list-section h4 {
+    margin-bottom: 10px;
+    border-bottom: 1px solid var(--hr-color);
+    padding-bottom: 5px;
+}
+.spell-info-inputs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 15px;
+    margin-bottom: 10px;
+}
+.spell-info-inputs label {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+.spell-info-inputs input[type="text"],
+.spell-info-inputs input[type="number"],
+.spell-info-inputs select {
+    padding: 6px;
+    font-size: 0.9em;
+    margin-bottom: 0;
+    border: 1px solid var(--input-border);
+    background-color: var(--input-bg);
+    color: var(--text-color);
+    border-radius: 3px;
+}
+.spell-info-inputs input[type="number"] { width: 60px; }
+.spell-info-inputs select { min-width: 120px; }
+
+/* Spell Slots Section */
+.spell-slots-grid {
+    display: grid;
+    grid-template-columns: repeat(3, auto); /* Level, Total, Expended */
+    gap: 8px 15px; /* Row gap, Column gap */
+    align-items: center;
+    max-width: 300px; /* Limit width */
+    margin-bottom: 15px;
+}
+.slot-header {
+    font-weight: bold;
+    text-align: center;
+    font-size: 0.9em;
+    color: var(--text-color-heading);
+}
+.slot-level-label {
+    font-weight: bold;
+    text-align: right;
+}
+.spell-slots-grid input[type="number"] {
+    width: 55px;
+    padding: 4px;
+    text-align: center;
+    font-size: 0.9em;
+    margin: 0;
+     /* Inherit styles */
+    border: 1px solid var(--input-border);
+    background-color: var(--input-bg);
+    color: var(--text-color);
+    border-radius: 3px;
+}
+/* Remove spinners */
+.spell-slots-grid input[type=number]::-webkit-outer-spin-button,
+.spell-slots-grid input[type=number]::-webkit-inner-spin-button {
+    -webkit-appearance: none; margin: 0;
+}
+
+
+
+/* Spell List Section - Tabs */
+#spell-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+    border-bottom: 2px solid var(--container-border);
+}
+.spell-tab-button {
+    padding: 8px 12px;
+    cursor: pointer;
+    border: none;
+    background-color: transparent;
+    color: var(--text-color-light);
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px; /* Overlap border */
+    transition: color 0.2s, border-color 0.2s;
+}
+.spell-tab-button:hover {
+    color: var(--link-hover-color);
+}
+.spell-tab-button.active {
+    color: var(--link-color);
+    border-bottom-color: var(--link-color);
+    font-weight: bold;
+}
+
+/* Spell Tab Content Area */
+.spell-tab-pane {
+    display: none; /* Hidden by default */
+    padding: 10px 0;
+    border-top: none;
+    /* max-height needed? maybe later */
+    /* overflow-y: auto; needed? maybe later */
+}
+.spell-tab-pane.active {
+    display: block; /* Show active tab */
+}
+
+/* Spell List Container within each tab */
+.spells-list-level {
+    /* Similar to inventory/attacks list display */
+    /* max-height: 350px; /* Or adjust */
+    /* overflow-y: auto; */
+    border: 1px solid var(--container-border);
+    padding: 10px;
+    margin-bottom: 10px;
+    background-color: var(--inventory-list-bg);
+    min-height: 50px; /* Minimum height */
+}
+
+/* Individual Spell Row */
+.spell-row {
+    display: grid; /* Use grid for complex layout */
+    grid-template-columns: auto 1fr auto; /* Checkbox, Main Info, Button */
+    grid-template-areas:
+        "prep name   cast"
+        "prep details cast";
+    gap: 5px 10px; /* Row gap, Column gap */
+    margin-bottom: 12px;
+    padding: 8px;
+    border: 1px solid var(--inventory-row-border);
+    border-radius: 4px;
+    background-color: var(--inventory-row-bg);
+}
+
+.spell-prep { grid-area: prep; align-self: start; padding-top: 2px; }
+.spell-name { grid-area: name; }
+.spell-details-grid {
+    grid-area: details;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(100px, auto)); /* Flexible columns */
+    gap: 4px 8px;
+    align-items: center;
+    margin-top: 3px;
+}
+.spell-cast-button-area { grid-area: cast; align-self: center; }
+
+.spell-row label {
+    font-size: 0.8em;
+    color: var(--text-color-light);
+    display: block; /* Put label above input */
+    margin-bottom: 1px;
+}
+.spell-row input[type="text"],
+.spell-row input[type="number"],
+.spell-row select,
+.spell-row textarea {
+    width: 100%;
+    padding: 5px;
+    font-size: 0.9em;
+    margin: 0;
+    border: 1px solid var(--input-border);
+    background-color: var(--input-bg);
+    color: var(--text-color);
+    border-radius: 3px;
+}
+body.dark-mode .spell-row input,
+body.dark-mode .spell-row select,
+body.dark-mode .spell-row textarea {
+    background-color: var(--input-bg);
+    color: var(--text-color);
+    border-color: var(--input-border);
+}
+
+.spell-name input { font-weight: bold; }
+.spell-row textarea { resize: vertical; min-height: 50px; font-family: inherit; }
+.spell-row input[type="checkbox"] { margin-right: 5px; }
+
+.cast-spell-btn {
+    padding: 6px 10px;
+    font-size: 0.9em;
+    background-color: var(--link-color); /* Make cast distinct */
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+.cast-spell-btn:hover {
+    background-color: var(--link-hover-color);
+}
+.spell-row .remove-item-btn {
+     /* Reuse style */
+     margin-top: 5px; /* Space below cast button */
+     padding: 4px 8px;
+     font-size: 0.8em;
+}
+
+#add-spell-btn {
+     /* Reuse style */
+    background-color: var(--add-button-bg);
+    color: white;
+    padding: 8px 12px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    margin-top: 10px; /* Space above button */
+}
+#add-spell-btn:hover { background-color: var(--add-button-hover-bg); }

@@ -19,7 +19,10 @@ let activeUsers={};
 // ENV Stuff
 const PORT = process.env.PORT || 3000;
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/dnd_room_db';
-
+const spellSlotLevelSchema = new mongoose.Schema({
+    total: { type: Number, default: 0, min: 0 },
+    expended: { type: Number, default: 0, min: 0 }
+}, { _id: false });
 // Serve the static files from 'public'
 app.use(express.static(path.join(__dirname,'public')));
 
@@ -89,6 +92,12 @@ const characterSheetSchema = new mongoose.Schema({
     skillSleightOfHandProficient: {type: Boolean, default: false}, // Dex
     skillStealthProficient: {type: Boolean, default: false},       // Dex
     skillSurvivalProficient: {type: Boolean, default: false},      // Wis
+    cp: { type: Number, default: 0 }, // Copper Pieces
+    sp: { type: Number, default: 0 }, // Silver Pieces
+    ep: { type: Number, default: 0 }, // Electrum Pieces
+    gp: { type: Number, default: 0 }, // Gold Pieces
+    pp: { type: Number, default: 0 }, // Platinum Pieces
+
         inventory: { 
         type: [{
             name: { type: String, required: true, trim: true },
@@ -105,6 +114,53 @@ const characterSheetSchema = new mongoose.Schema({
         }],
         default: []
     },
+    // *** NEW: Attacks ***
+    attacks: {
+        type: [{
+            name: { type: String, default: '', trim: true },
+            attackBonus: { type: String, default: '+0', trim: true }, // Store as string like "+5" or "+Str+Prof"
+            damage: { type: String, default: '', trim: true },      // Store as string like "1d8+3"
+            damageType: { type: String, default: '', trim: true }   // e.g., "Slashing"
+        }],
+        default: []
+    },
+        // *** NEW: Spellcasting Info ***
+    spellcastingClass: { type: String, default: '', trim: true },
+    spellcastingAbility: { type: String, default: '', trim: true }, // e.g., 'intelligence', 'wisdom', 'charisma'
+    spellSaveDC: { type: Number, default: 8 },
+    spellAttackBonus: { type: Number, default: 0 },
+
+    // *** NEW: Spell Slots (Object containing levels 0-9) ***
+    spellSlots: {
+        level0: spellSlotLevelSchema, // Cantrips technically don't use slots, but good for structure
+        level1: spellSlotLevelSchema,
+        level2: spellSlotLevelSchema,
+        level3: spellSlotLevelSchema,
+        level4: spellSlotLevelSchema,
+        level5: spellSlotLevelSchema,
+        level6: spellSlotLevelSchema,
+        level7: spellSlotLevelSchema,
+        level8: spellSlotLevelSchema,
+        level9: spellSlotLevelSchema,
+    },
+
+    // *** NEW: Spells List ***
+    spells: {
+        type: [{
+            name: { type: String, default: '', trim: true },
+            prepared: { type: Boolean, default: false },
+            level: { type: Number, default: 0, min: 0, max: 9 },
+            school: { type: String, default: '', trim: true },
+            castingTime: { type: String, default: '', trim: true },
+            range: { type: String, default: '', trim: true },
+            components: { type: String, default: '', trim: true }, // V, S, M (details)
+            duration: { type: String, default: '', trim: true },
+            description: { type: String, default: '', trim: true },
+            damageEffect: { type: String, default: '', trim: true } // e.g., "3d6 Fire", "Save: Dex", "Heals 1d4"
+        }],
+        default: []
+    },
+    
     lastUpdated:{type:Date,default:Date.now}
 
 });
@@ -245,56 +301,75 @@ io.on('connection',(socket)=>{
     socket.emit('server message', { text: 'Welcome! You are connected.' }); // Send welcome msg 
     // Update character sheet
     socket.on('update character sheet', async (data) => {
-    const username = activeUsers[socket.id];
-    if (!username) {
-        return socket.emit('sheet update error', { message: 'User not authenticated.' });
-    }
-
-    if (!data || !data.sheetUpdates) {
-        return socket.emit('sheet update error', { message: 'No sheet update data provided.' });
-    }
-
-    try {
-        const user = await User.findOne({ username: username });
-        if (!user) {
-            return socket.emit('sheet update error', { message: 'User not found.' });
+        const username = activeUsers[socket.id];
+        if (!username) {
+            return socket.emit('sheet update error', { message: 'User not authenticated.' });
         }
 
-        const sheet = await CharacterSheet.findOne({ userId: user._id });
-        if (!sheet) {
-            return socket.emit('sheet update error', { message: 'Character sheet not found.' });
+        if (!data || !data.sheetUpdates) {
+            return socket.emit('sheet update error', { message: 'No sheet update data provided.' });
         }
 
-        // Apply updates
-        // Make sure to only update fields that are actually in your schema
-        const allowedFields = Object.keys(CharacterSheet.schema.paths);
-        for (const key in data.sheetUpdates) {
-            if (allowedFields.includes(key) && key !== '_id' && key !== 'userId' && key !== 'playerName') {
-                // Special handling for numbers that might come as strings
-                if (CharacterSheet.schema.paths[key].instance === 'Number') {
-                    const numValue = parseFloat(data.sheetUpdates[key]);
-                    sheet[key] = isNaN(numValue) ? (sheet[key] || 0) : numValue; // Default to current or 0 if NaN
-                } else {
+        try {
+            const user = await User.findOne({ username: username });
+            if (!user) {
+                return socket.emit('sheet update error', { message: 'User not found.' });
+            }
+
+            const sheet = await CharacterSheet.findOne({ userId: user._id });
+            if (!sheet) {
+                return socket.emit('sheet update error', { message: 'Character sheet not found.' });
+            }
+
+            // --- MODIFIED UPDATE LOGIC ---
+            for (const key in data.sheetUpdates) {
+                // Check if the key exists directly in the schema's paths
+                // Mongoose's schema.path(key) returns the schema type info if the path exists
+                if (CharacterSheet.schema.path(key) && key !== '_id' && key !== 'userId' && key !== 'playerName') {
+
+                    // Direct assignment is often sufficient for Mongoose to handle validation
+                    // and type coercion based on the schema, including nested objects/arrays.
                     sheet[key] = data.sheetUpdates[key];
+
+                    // Optional: Add specific parsing ONLY if needed (e.g., ensuring numbers from strings)
+                    // Example (keep if you had issues with numbers previously):
+                    /*
+                    if (CharacterSheet.schema.path(key).instance === 'Number' && typeof data.sheetUpdates[key] !== 'number') {
+                        const numValue = parseFloat(data.sheetUpdates[key]);
+                        // Assign parsed number if valid, otherwise let Mongoose handle/validate potentially incorrect type
+                        // Or assign existing value: sheet[key] = isNaN(numValue) ? sheet[key] : numValue;
+                        sheet[key] = isNaN(numValue) ? data.sheetUpdates[key] : numValue; // Assign potentially invalid if NaN for Mongoose validation
+                    } else {
+                        sheet[key] = data.sheetUpdates[key]; // Assign other types directly
+                    }
+                    */
+
+                } else {
+                    // This warning is now more likely to catch genuinely incorrect field names
+                    console.warn(`Attempted to update disallowed or non-existent field: ${key}`);
                 }
+            }
+            // --- END MODIFIED UPDATE LOGIC ---
+
+            await sheet.save(); // Mongoose performs validation here
+
+            console.log(`Character sheet for ${username} updated successfully. Updated fields: ${Object.keys(data.sheetUpdates).join(', ')}`);
+
+            // Emit the full updated sheet
+            io.emit('character sheet updated', {
+                playerName: username,
+                updatedSheet: sheet.toObject() // Send the full, updated sheet as a plain object
+            });
+
+        } catch (err) {
+            console.error(`Error updating character sheet for ${username}:`, err);
+            // Check for validation errors specifically
+            if (err.name === 'ValidationError') {
+                socket.emit('sheet update error', { message: `Validation failed: ${err.message}` });
             } else {
-                console.warn(`Attempted to update disallowed or non-existent field: ${key}`);
+                socket.emit('sheet update error', { message: 'Server error while saving sheet.' });
             }
         }
-
-        await sheet.save(); 
-
-        console.log(`Character sheet for ${username} updated successfully.`);
-
-        io.emit('character sheet updated', {
-            playerName: username,
-            updatedSheet: sheet.toObject() // Send the full, updated sheet as a plain object
-        });
-
-    } catch (err) {
-        console.error("Error updating character sheet:", err);
-        socket.emit('sheet update error', { message: 'Server error while saving sheet.' });
-    }
     });
     // Disconnect event
     socket.on('disconnect',async()=>{
