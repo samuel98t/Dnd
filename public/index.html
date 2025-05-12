@@ -52,6 +52,16 @@
                     <input type="text" id="customDiceInput" placeholder="e.g., 2d6+3, 1d20">
                     <button id="customRollButton">Roll Custom</button>
                 </div>
+                <!-- *** NEW: Quick Roll Actions *** -->
+                <div id="quick-roll-actions" style="margin-top: 15px;">
+                    <h4>Quick Actions</h4>
+                    <button id="quickAttackButton" class="quick-roll-button" title="Uses the first attack defined in your Attacks modal">Attack with First Weapon</button>
+                    <button id="quickDamageButton" class="quick-roll-button" title="Rolls the Damage defined for the first attack in your Attacks modal">Roll 1st Weapon Damage</button>
+                    <button id="quickSpellAttackButton" class="quick-roll-button" title="Uses your Spell Attack Bonus defined in the Spellcasting modal">Make Spell Attack</button>
+                    <!-- Damage roll for the first weapon could be added here later if desired -->
+                </div>
+                <!-- *** END Quick Roll Actions *** -->
+
                 <!-- DM ONLY Tools - Initially hidden -->
                 <div id="dm-tools-section" style="display: none; border-top: 2px dashed #ccc; padding-top: 15px; margin-top:15px;">
                     <h3>DM Tools</h3>

@@ -219,21 +219,39 @@ hr {
 }
 
 #chat-messages {
-    flex-grow: 1;
-    overflow-y: auto;
+    flex-grow: 1; /* Keep this - allows it to take available space */
+    /* Remove or comment out min-height if you have it */
+    /* min-height: 400px; */
+    max-height: 450px; /* <<< ADD OR ADJUST: Set a max height (e.g., 450px or 60vh) */
+    overflow-y: auto;  /* <<< ADD OR CHANGE: Enable vertical scrolling only when needed */
     border: 1px solid var(--container-border);
     padding: 10px;
     margin-bottom: 10px;
     background-color: var(--chat-messages-bg);
-    min-height: 400px;
-}
-/* Style chat paragraphs */
-#chat-messages p {
-    margin: 0 0 5px 0; /* Compact spacing */
-    line-height: 1.4;
-    word-wrap: break-word; /* Prevent long words/URLs from breaking layout */
+    /* word-wrap: break-word; /* You might want this inside the p tag style instead */ */
 }
 
+/* Optional: Ensure paragraph wrapping still works */
+#chat-messages p {
+    margin: 0 0 5px 0;
+    line-height: 1.4;
+    word-wrap: break-word; /* Ensure long words wrap within the fixed container */
+    overflow-wrap: break-word; /* More modern equivalent */
+}
+
+/* Also ensure the parent container allows the chat messages to grow */
+#middle-column-chat {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 15px;
+    border: 1px solid var(--container-border);
+    border-radius: 5px;
+    background-color: var(--nested-container-bg);
+    min-width: 300px;
+    /* Optional: Add overflow hidden if the column itself might grow too large */
+    /* overflow: hidden; */
+}
 
 .chat-input-container {
     display: flex;
@@ -245,7 +263,11 @@ hr {
     flex-grow: 1;
     margin-bottom: 0;
 }
-
+#chat-messages p:last-child {
+    font-weight: bold;
+    /* Optional: Add a subtle background or different color if you want more emphasis */
+    /* background-color: rgba(0, 0, 0, 0.03); */ /* Example subtle background */
+}
 
 #sidebar-area {
     flex-basis: 320px;
@@ -1081,3 +1103,31 @@ body.dark-mode .spell-row textarea {
     margin-top: 10px; /* Space above button */
 }
 #add-spell-btn:hover { background-color: var(--add-button-hover-bg); }
+/* --- Quick Roll Actions --- */
+#quick-roll-actions {
+    padding-top: 10px;
+    border-top: 1px dashed var(--hr-color);
+}
+
+#quick-roll-actions h4 {
+    margin-bottom: 8px;
+    font-size: 1em;
+}
+
+/* Container for side-by-side buttons */
+.quick-roll-buttons-container {
+    display: flex; /* Use flexbox */
+    gap: 8px; /* Adjust gap between buttons */
+}
+
+.quick-roll-button {
+    flex: 1; /* Make buttons share width equally */
+    margin-bottom: 0;
+    padding: 7px 5px; /* Slightly smaller padding */
+    font-size: 0.8em; /* Even smaller font may be needed */
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    /* Inherits base button styles for colors/hover */
+}

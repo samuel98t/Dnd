@@ -300,7 +300,7 @@ io.on('connection',(socket)=>{
     socket.emit('chat history', chatHistory);
     socket.emit('server message', { text: 'Welcome! You are connected.' }); // Send welcome msg 
     // Update character sheet
- socket.on('update character sheet', async (data) => {
+  socket.on('update character sheet', async (data) => {
         const username = activeUsers[socket.id];
         if (!username) {
             return socket.emit('sheet update error', { message: 'User not authenticated.' });
@@ -325,7 +325,8 @@ io.on('connection',(socket)=>{
 
             // --- FINAL REVISED UPDATE LOGIC ---
             for (const key in data.sheetUpdates) {
-                console.log(`[Update Sheet - ${username}] Processing key: '${key}'`);
+                // --- ADDED LOG: Show key and value ---
+                console.log(`[Update Sheet - ${username}] Processing key: '${key}' with value:`, data.sheetUpdates[key]);
 
                 // Skip protected fields
                 if (key === '_id' || key === 'userId' || key === 'playerName') {
@@ -338,8 +339,6 @@ io.on('connection',(socket)=>{
                 let isValidPath = !!pathInfo; // Convert pathInfo to boolean
 
                 // Check 2: If schema.path() failed, does the key exist on the document instance? (Fallback)
-                // This handles cases where schema.path might unexpectedly fail for complex objects.
-                // Using `key in sheet` also checks prototype chain, which is fine here.
                 if (!isValidPath && (key in sheet)) {
                     console.warn(`[Update Sheet - ${username}] Key '${key}' not found by schema.path(), but exists on document. Allowing update.`);
                     isValidPath = true; // Treat as valid based on fallback check
@@ -353,8 +352,25 @@ io.on('connection',(socket)=>{
                         console.log(`[Update Sheet - ${username}] Key '${key}' allowed via fallback check. Assigning value.`);
                     }
                     try {
+                        // --- ADDED LOG: Show assignment ---
+                        console.log(`[Update Sheet - ${username}] Assigning sheet['${key}'] =`, data.sheetUpdates[key]);
+
                         // Direct assignment using Mongoose setter logic
                         sheet[key] = data.sheetUpdates[key];
+
+                        // --- ADDED LOG: Check value immediately after assignment ---
+                        // Note: Mongoose setters might not update the value synchronously here for complex types,
+                        // but it's useful for simple types like Numbers.
+                        console.log(`[Update Sheet - ${username}] Value after assignment (may not reflect immediately for complex types):`, sheet[key]);
+
+                        // --- ADDED: Manually mark modified if necessary (especially for mixed types or arrays/objects if auto-detection fails) ---
+                        // For simple Number types like cp, gp, etc., this *shouldn't* be needed, but it's a good fallback.
+                        // It checks if Mongoose didn't detect the modification AND if the values actually differ.
+                        if (!sheet.isModified(key) && sheet[key] !== data.sheetUpdates[key]) {
+                            console.warn(`[Update Sheet - ${username}] Manually marking path '${key}' as modified.`);
+                            sheet.markModified(key);
+                        }
+
                     } catch(assignError) {
                         console.error(`[Update Sheet - ${username}] Error assigning value for key '${key}':`, assignError);
                     }
@@ -366,14 +382,20 @@ io.on('connection',(socket)=>{
             }
             // --- END FINAL REVISED UPDATE LOGIC ---
 
+            // --- ADDED LOG: Log the sheet object right before saving ---
+            console.log(`[Update Sheet - ${username}] Sheet object BEFORE save:`, sheet.toObject()); // Use toObject() for cleaner log
+
             await sheet.save(); // Mongoose performs validation here
 
             console.log(`[Update Sheet - ${username}] Sheet saved successfully.`);
 
+            // --- ADDED LOG: Log the sheet object right after saving ---
+            console.log(`[Update Sheet - ${username}] Sheet object AFTER save:`, sheet.toObject()); // Use toObject()
+
             // Emit the full updated sheet
             io.emit('character sheet updated', {
                 playerName: username,
-                updatedSheet: sheet.toObject()
+                updatedSheet: sheet.toObject() // Send the saved, updated object
             });
 
         } catch (err) {
@@ -390,7 +412,9 @@ io.on('connection',(socket)=>{
                 socket.emit('sheet update error', { message: 'Server error while saving sheet.' });
             }
         }
-    });
+    }); // End of 'update character sheet' handler
+
+
     // Disconnect event
     socket.on('disconnect',async()=>{
         const username = activeUsers[socket.id];

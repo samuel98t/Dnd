@@ -9,6 +9,10 @@ const attacksModal = document.getElementById('attacksModal');
 const closeAttacksModalButton = document.getElementById('closeAttacksModal');
 const modalAttacksContent = document.getElementById('modalAttacksContent');
 const saveAttacksButton = document.getElementById('saveAttacksButton');
+//  Quick Roll Action Buttons 
+const quickDamageButton = document.getElementById('quickDamageButton');
+const quickAttackButton = document.getElementById('quickAttackButton');
+const quickSpellAttackButton = document.getElementById('quickSpellAttackButton')
 // MONEY
 const moneyCPInput = document.getElementById('moneyCP');
 const moneySPInput = document.getElementById('moneySP');
@@ -803,7 +807,7 @@ if (openInventoryButton) {
         if (currentCharacterSheet) {
             // currentCharacterSheet.inventory should exist (even as [])
             // due to server-side schema default and auth success data
-            populateInventoryModal(currentCharacterSheet.inventory || []);
+            populateInventoryModal(currentCharacterSheet.inventory || [],currentCharacterSheet);
             inventoryModal.style.display = 'block';
         } else {
             addMessageToChat("Please log in to manage inventory.");
@@ -1895,4 +1899,110 @@ if (saveSpellsButton) {
         addMessageToChat("Saving Spellcasting changes...");
         // spellsModal.style.display = 'none'; // Optional close
     });
+}
+function formatBonusString(bonus) {
+    const numBonus = parseInt(bonus, 10); // Try parsing even if it's like "+5"
+    if (isNaN(numBonus) || numBonus === 0) return "";
+    return numBonus > 0 ? `+${numBonus}` : `${numBonus}`; // Handles positive and negative
+}
+// *** NEW: Quick Roll Action Handlers ***
+function handleQuickAttack() {
+    if (!currentCharacterSheet) {
+        addMessageToChat("Error: Character sheet not loaded.");
+        return;
+    }
+    if (!currentCharacterSheet.attacks || currentCharacterSheet.attacks.length === 0) {
+        addMessageToChat("Error: No attacks defined in your character sheet.");
+        return;
+    }
+
+    const firstAttack = currentCharacterSheet.attacks[0];
+    const attackName = firstAttack.name || "First Weapon Attack";
+    const attackBonusStr = firstAttack.attackBonus || '+0';
+    const rollerName = getPlayerName();
+
+    console.log(`Quick Attack: Using "${attackName}", Bonus: "${attackBonusStr}"`);
+
+    // --- Attack Roll ONLY ---
+    let atkBonusValue = 0;
+    const bonusMatch = attackBonusStr.match(/[+-]?\d+/);
+    if (bonusMatch) {
+        atkBonusValue = parseInt(bonusMatch[0], 10);
+    } else {
+        console.warn(`Could not parse attack bonus "${attackBonusStr}" for ${attackName}. Using 0.`);
+    }
+
+    const atkBonusStringForRoll = formatBonusString(atkBonusValue);
+    const attackRollString = `1d20${atkBonusStringForRoll}`;
+
+    socket.emit('dice roll', {
+        rollerName: rollerName,
+        rollString: attackRollString,
+        description: `${attackName}: Attack Roll (${attackRollString})`
+    });
+}
+
+// *** NEW: Handler for Quick Damage Roll ***
+function handleQuickDamage() {
+    if (!currentCharacterSheet) {
+        addMessageToChat("Error: Character sheet not loaded.");
+        return;
+    }
+    if (!currentCharacterSheet.attacks || currentCharacterSheet.attacks.length === 0) {
+        addMessageToChat("Error: No attacks defined in your character sheet.");
+        return;
+    }
+
+    const firstAttack = currentCharacterSheet.attacks[0];
+    const attackName = firstAttack.name || "First Weapon";
+    const damageStr = firstAttack.damage || '';
+    const rollerName = getPlayerName();
+
+    console.log(`Quick Damage: Using "${attackName}", Damage String: "${damageStr}"`);
+
+    // --- Damage Roll ---
+    if (damageStr && damageStr.trim() !== '') {
+        if (damageStr.includes('d') || damageStr.includes('D')) {
+             socket.emit('dice roll', {
+                rollerName: rollerName,
+                rollString: damageStr.trim(),
+                description: `${attackName}: Damage Roll (${damageStr.trim()})`
+            });
+        } else {
+            addMessageToChat(`${rollerName} deals ${damageStr} damage with ${attackName}.`);
+        }
+    } else {
+        addMessageToChat(`${attackName} doesn't specify damage.`);
+    }
+}
+
+function handleQuickSpellAttack() {
+    if (!currentCharacterSheet) {
+        addMessageToChat("Error: Character sheet not loaded.");
+        return;
+    }
+
+    // spellAttackBonus should be a number according to the schema
+    const bonusValue = currentCharacterSheet.spellAttackBonus || 0;
+    const bonusStringForRoll = formatBonusString(bonusValue); // Use helper
+    const rollString = `1d20${bonusStringForRoll}`;
+    const rollerName = getPlayerName();
+
+    console.log(`Quick Spell Attack: Using Bonus: ${bonusValue} (${bonusStringForRoll}), Roll: ${rollString}`);
+
+    socket.emit('dice roll', {
+        rollerName: rollerName,
+        rollString: rollString,
+        description: `Spell Attack Roll (${rollString})` // Simple description
+    });
+}
+if (quickAttackButton) {
+    quickAttackButton.addEventListener('click', handleQuickAttack);
+}
+
+if (quickSpellAttackButton) {
+    quickSpellAttackButton.addEventListener('click', handleQuickSpellAttack);
+}
+if (quickDamageButton) {
+    quickDamageButton.addEventListener('click', handleQuickDamage);
 }
