@@ -1031,18 +1031,7 @@ function getProficiencyBonusValue(sheetDataOrInput) {
     }
     return isNaN(pbVal) ? 0 : pbVal;
 }
-// Helper to get proficiency bonus value (now a number)
-function getProficiencyBonusValue(sheetDataOrInput) {
-    let pbVal = 0;
-    if (typeof sheetDataOrInput === 'number') { // If direct value passed
-        pbVal = sheetDataOrInput;
-    } else if (sheetDataOrInput && typeof sheetDataOrInput.value === 'string') { // If it's an input element
-         pbVal = parseInt(sheetDataOrInput.value, 10);
-    } else if (currentCharacterSheet) { // Fallback to currentCharacterSheet
-        pbVal = parseInt(currentCharacterSheet.ProficiencyBonus, 10);
-    }
-    return isNaN(pbVal) ? 0 : pbVal;
-}
+
 
 
 // Centralized function to update all calculated bonuses in the modal
@@ -1141,54 +1130,6 @@ function populateDiceRollerControls() {
 }
 
 
-// --- Roll Handling ---
-function handleSpecificRoll(rollTitle, baseAbilityKey, proficiencyFieldKey = null, rollType = "1d20") {
-    if (!currentCharacterSheet) {
-        addMessageToChat("Error: Character sheet not loaded. Cannot perform roll.");
-        return;
-    }
-    const rollerName = getPlayerName();
-
-    const abilityScore = parseInt(currentCharacterSheet[baseAbilityKey], 10);
-    if (isNaN(abilityScore)) {
-        addMessageToChat(`Error: ${baseAbilityKey} score not found or invalid.`);
-        return;
-    }
-    const abilityModifierValue = parseInt(calculateModifier(abilityScore));
-
-    let totalModifierValue = abilityModifierValue;
-    let proficiencyBonusAdded = false;
-    let pbValue = 0;
-
-    if (proficiencyFieldKey) {
-        const isProficient = currentCharacterSheet[proficiencyFieldKey];
-        if (isProficient) {
-            pbValue = getProficiencyBonusValue();
-            totalModifierValue += pbValue;
-            proficiencyBonusAdded = true;
-        }
-    }
-
-    const modifierStringForServer = totalModifierValue !== 0 ? `${totalModifierValue >= 0 ? '+' : ''}${totalModifierValue}` : "";
-    const diceStringForServer = `${rollType}${modifierStringForServer}`;
-
-    // Refined Description: Focus on the "why"
-    let description = `${rollTitle} (Base: ${rollType}`; // e.g. "Strength Check (Base: 1d20"
-    if (abilityModifierValue !== 0) {
-        description += ` ${abilityModifierValue >= 0 ? '+' : ''}${abilityModifierValue}[${baseAbilityKey.substring(0,3)}]`;
-    }
-    if (proficiencyBonusAdded && pbValue !== 0) {
-        description += ` ${pbValue >= 0 ? '+' : ''}${pbValue}[PB]`;
-    }
-    description += `)`; // e.g., "Strength Check (Base: 1d20 -5[Str])"
-                       // or "Initiative (Base: 1d20 +2[Dex] +3[PB])"
-
-    socket.emit('dice roll', {
-        rollerName: rollerName,
-        rollString: diceStringForServer, // This is what server actually rolls, e.g., "1d20-5"
-        description: description         // This explains the components
-    });
-}
 
 // Event Listener for Custom Roll Button
 if (customRollButton) {
@@ -1459,6 +1400,116 @@ function populateFeatsModal(featsAndTraitsArray, isReadOnly = false) {
         saveFeatsButton.style.display = isReadOnly ? 'none' : 'inline-block';
     }
 }
+// --- populateSpellsModal (Ensure previous modifications + Read-Only) ---
+// Add isReadOnly parameter
+function populateSpellsModal(sheetData, isReadOnly = false) {
+    if (!sheetData || !modalSpellsContent) return;
+
+    // --- Add Title indication ---
+    const titleH2 = spellsModal.querySelector('h2');
+    if(titleH2) {
+        titleH2.textContent = isReadOnly ? `Viewing ${sheetData.playerName}'s Spellcasting (Read-Only)` : "Spellcasting";
+    }
+    // --- End Title ---
+
+    // --- Populate Core Info (and disable) ---
+    if (spellClassInput) {
+        spellClassInput.value = sheetData.spellcastingClass || '';
+        spellClassInput.disabled = isReadOnly;
+    }
+    if (spellAbilitySelect) {
+        spellAbilitySelect.value = sheetData.spellcastingAbility || '';
+        spellAbilitySelect.disabled = isReadOnly;
+    }
+    if (spellSaveDCInput) {
+        spellSaveDCInput.value = sheetData.spellSaveDC || 8;
+        spellSaveDCInput.disabled = isReadOnly;
+    }
+    if (spellAttackBonusInput) {
+        spellAttackBonusInput.value = sheetData.spellAttackBonus || 0;
+        spellAttackBonusInput.disabled = isReadOnly;
+    }
+
+    // Populate Spell Slots (and disable inputs)
+    populateSpellSlots(sheetData.spellSlots, isReadOnly); // Pass flag
+
+    // Populate Spells List with Tabs (and disable controls within)
+    populateSpellTabsAndLists(sheetData.spells || [], isReadOnly); // Pass flag
+
+    // Activate the first tab (Cantrips) by default
+    activateSpellTab(0); // Show level 0 initially
+
+    // Hide Save Button in Read-Only Mode
+    if (saveSpellsButton) {
+        saveSpellsButton.style.display = isReadOnly ? 'none' : 'inline-block';
+    }
+}
+
+// Modify populateSpellSlots to accept isReadOnly
+function populateSpellSlots(spellSlotsData = {}, isReadOnly = false) {
+    if (!spellSlotsGrid) return;
+    // Clear previous slots but keep headers
+    spellSlotsGrid.innerHTML = `
+        <div class="slot-header">Level</div>
+        <div class="slot-header">Total</div>
+        <div class="slot-header">Expended</div>
+    `;
+
+    for (let level = 1; level <= 9; level++) { // Only show slots for 1-9
+        const levelData = spellSlotsData[`level${level}`] || { total: 0, expended: 0 };
+
+        const levelLabel = document.createElement('div');
+        levelLabel.className = 'slot-level-label';
+        levelLabel.textContent = `Level ${level}`;
+
+        const totalInput = document.createElement('input');
+        totalInput.type = 'number';
+        totalInput.id = `spellSlotsTotal-${level}`;
+        totalInput.min = '0';
+        totalInput.value = levelData.total || 0;
+        totalInput.dataset.level = level;
+        totalInput.dataset.type = 'total';
+        totalInput.disabled = isReadOnly; // <<< Disable
+
+        const expendedInput = document.createElement('input');
+        expendedInput.type = 'number';
+        expendedInput.id = `spellSlotsExpended-${level}`;
+        expendedInput.min = '0';
+        expendedInput.value = levelData.expended || 0;
+        expendedInput.dataset.level = level;
+        expendedInput.dataset.type = 'expended';
+        expendedInput.disabled = isReadOnly; // <<< Disable
+
+        // Keep listeners if not read-only
+        if (!isReadOnly) {
+            expendedInput.addEventListener('input', (e) => {
+                 const currentTotal = parseInt(document.getElementById(`spellSlotsTotal-${level}`)?.value || '0', 10);
+                 if (!isNaN(currentTotal) && parseInt(e.target.value, 10) > currentTotal) {
+                     e.target.value = currentTotal;
+                 }
+                 if (parseInt(e.target.value, 10) < 0) {
+                      e.target.value = 0;
+                 }
+            });
+             totalInput.addEventListener('input', (e)=>{
+                 const currentExpendedInput = document.getElementById(`spellSlotsExpended-${level}`);
+                 const currentExpended = parseInt(currentExpendedInput?.value || '0', 10);
+                 const newTotal = parseInt(e.target.value, 10);
+                  if (!isNaN(currentExpended) && !isNaN(newTotal) && currentExpended > newTotal) {
+                     currentExpendedInput.value = newTotal >= 0 ? newTotal : 0;
+                 }
+                  if (!isNaN(newTotal) && newTotal < 0) {
+                      e.target.value = 0;
+                  }
+             });
+         }
+
+        spellSlotsGrid.appendChild(levelLabel);
+        spellSlotsGrid.appendChild(totalInput);
+        spellSlotsGrid.appendChild(expendedInput);
+    }
+}
+
 // Save Feats & Traits Button Listener
 if (saveFeatsButton) {
     saveFeatsButton.addEventListener('click', () => {
@@ -1531,179 +1582,163 @@ if (closeSpellsModalButton) {
     });
 }
 // Helper function to create a DOM row for a single attack
-function createAttackRowElement(attack = {}) {
+function createAttackRowElement(attack = {}, isReadOnly = false) {
     const itemRowDiv = document.createElement('div');
     itemRowDiv.className = 'attack-row';
 
+    // --- Input Fields ---
     const nameInput = document.createElement('input');
     nameInput.type = 'text';
     nameInput.value = attack.name || '';
     nameInput.placeholder = "Attack Name";
     nameInput.className = 'attack-name';
+    nameInput.disabled = isReadOnly;
 
     const bonusInput = document.createElement('input');
-    bonusInput.type = 'text'; // Keep as text to allow "+5" or "+Str" etc.
+    bonusInput.type = 'text';
     bonusInput.value = attack.attackBonus || '+0';
     bonusInput.placeholder = "Atk Bonus";
     bonusInput.className = 'attack-bonus';
+    bonusInput.disabled = isReadOnly;
 
-    const damageInput = document.createElement('input');
-    damageInput.type = 'text'; // Keep as text for "1d8+3"
-    damageInput.value = attack.damage || '';
-    damageInput.placeholder = "Damage";
-    damageInput.className = 'attack-damage';
+    const damageDiceInput = document.createElement('input'); // Renamed for clarity
+    damageDiceInput.type = 'text';
+    damageDiceInput.value = attack.damage || ''; // This field stores "1d8+3"
+    damageDiceInput.placeholder = "Damage (e.g., 1d8+3)";
+    damageDiceInput.className = 'attack-damage'; // Keep class for CSS targeting
+    damageDiceInput.disabled = isReadOnly;
 
     const typeInput = document.createElement('input');
     typeInput.type = 'text';
     typeInput.value = attack.damageType || '';
     typeInput.placeholder = "Type";
     typeInput.className = 'attack-type';
-
-    const attackButton = document.createElement('button');
-    attackButton.textContent = 'Attack';
-    attackButton.className = 'attack-roll-btn'; // Specific class for attack roll
-    attackButton.type = 'button';
-    attackButton.onclick = () => {
-        handleAttackRoll(nameInput.value, bonusInput.value, damageInput.value);
-    };
-
-    const removeButton = document.createElement('button');
-    removeButton.textContent = 'Remove';
-    removeButton.className = 'remove-item-btn'; // Reuse style
-    removeButton.type = 'button';
-    removeButton.onclick = () => {
-        itemRowDiv.remove();
-    };
+    typeInput.disabled = isReadOnly;
 
     itemRowDiv.appendChild(nameInput);
     itemRowDiv.appendChild(bonusInput);
-    itemRowDiv.appendChild(damageInput);
+    itemRowDiv.appendChild(damageDiceInput); // This is the damage dice string
     itemRowDiv.appendChild(typeInput);
-    itemRowDiv.appendChild(attackButton); // Add attack button
-    itemRowDiv.appendChild(removeButton); // Add remove button
+
+    // --- Buttons Area ---
+    const buttonsDiv = document.createElement('div');
+    buttonsDiv.className = 'attack-buttons-container'; // For styling the group of buttons
+
+    if (!isReadOnly) {
+        // 1. Attack Roll Button
+        const attackRollButton = document.createElement('button');
+        attackRollButton.textContent = 'Attack';
+        attackRollButton.className = 'attack-roll-btn modal-action-button'; // Added common class
+        attackRollButton.type = 'button';
+        attackRollButton.title = "Roll Attack";
+        attackRollButton.onclick = () => {
+            console.log("Modal Attack Roll button clicked for:", nameInput.value);
+            // Call your existing handleAttackRoll or a modified one
+            // Pass only what's needed for the attack roll itself
+            handleAttackRoll(nameInput.value, bonusInput.value);
+        };
+        buttonsDiv.appendChild(attackRollButton);
+
+        // 2. Damage Roll Button (NEW)
+        const damageRollButton = document.createElement('button');
+        damageRollButton.textContent = 'Damage';
+        damageRollButton.className = 'damage-roll-btn modal-action-button'; // Added common class
+        damageRollButton.type = 'button';
+        damageRollButton.title = "Roll Damage";
+        damageRollButton.onclick = () => {
+            console.log("Modal Damage Roll button clicked for:", nameInput.value);
+            // Pass the attack name and the content of the damageDiceInput
+            handleDamageRoll(nameInput.value, damageDiceInput.value);
+        };
+        buttonsDiv.appendChild(damageRollButton);
+
+        // 3. Remove Button
+        const removeButton = document.createElement('button');
+        removeButton.textContent = 'Remove';
+        removeButton.className = 'remove-item-btn';
+        removeButton.type = 'button';
+        removeButton.onclick = () => {
+            itemRowDiv.remove();
+        };
+        buttonsDiv.appendChild(removeButton);
+    } else {
+        // Optional: Add placeholders for layout consistency in read-only mode
+        const placeholder = document.createElement('div');
+        placeholder.style.minWidth = '60px'; // Adjust if buttons are wider
+        placeholder.style.display = 'inline-block';
+        placeholder.style.height = '1em'; // Give it some height
+        buttonsDiv.appendChild(placeholder.cloneNode(true)); // For Attack
+        buttonsDiv.appendChild(placeholder.cloneNode(true)); // For Damage
+        buttonsDiv.appendChild(placeholder.cloneNode(true)); // For Remove
+    }
+    itemRowDiv.appendChild(buttonsDiv); // Append the container of buttons
 
     return itemRowDiv;
 }
 
+
+
+
+const SPELL_LEVELS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+
 // Function to populate the Attacks modal content
 function populateAttacksModal(attacksArray, isReadOnly = false) {
-    if (!modalAttacksContent) return;
-    modalAttacksContent.innerHTML = ''; // Clear
+    if (!modalAttacksContent) {
+        console.error("Attacks modal content element not found!");
+        return;
+    }
+    modalAttacksContent.innerHTML = ''; // Clear previous content
 
-    // --- Add Title indication ---
     const titleH2 = attacksModal.querySelector('h2');
-    if(titleH2) {
-        // Fetching player name might require passing sheetData
+    if (titleH2) {
         titleH2.textContent = isReadOnly ? `Viewing Attacks (Read-Only)` : "Attacks & Spellcasting Actions";
     }
-    // --- End Title ---
 
     const listContainerDiv = document.createElement('div');
     listContainerDiv.id = 'attacks-list-display';
 
-    // Modified row creation function (internal)
-    const createAttackRowElement = (attack = {}) => { // isReadOnly available via closure
-        const itemRowDiv = document.createElement('div');
-        itemRowDiv.className = 'attack-row';
-
-        const nameInput = document.createElement('input');
-        nameInput.type = 'text';
-        nameInput.value = attack.name || '';
-        nameInput.placeholder = "Attack Name";
-        nameInput.className = 'attack-name';
-        nameInput.disabled = isReadOnly; // <<< Disable
-
-        const bonusInput = document.createElement('input');
-        bonusInput.type = 'text';
-        bonusInput.value = attack.attackBonus || '+0';
-        bonusInput.placeholder = "Atk Bonus";
-        bonusInput.className = 'attack-bonus';
-        bonusInput.disabled = isReadOnly; // <<< Disable
-
-        const damageInput = document.createElement('input');
-        damageInput.type = 'text';
-        damageInput.value = attack.damage || '';
-        damageInput.placeholder = "Damage";
-        damageInput.className = 'attack-damage';
-        damageInput.disabled = isReadOnly; // <<< Disable
-
-        const typeInput = document.createElement('input');
-        typeInput.type = 'text';
-        typeInput.value = attack.damageType || '';
-        typeInput.placeholder = "Type";
-        typeInput.className = 'attack-type';
-        typeInput.disabled = isReadOnly; // <<< Disable
-
-        itemRowDiv.appendChild(nameInput);
-        itemRowDiv.appendChild(bonusInput);
-        itemRowDiv.appendChild(damageInput);
-        itemRowDiv.appendChild(typeInput);
-
-        // Only add Attack and Remove buttons if NOT read-only
-        if (!isReadOnly) {
-            const attackButton = document.createElement('button');
-            attackButton.textContent = 'Attack';
-            attackButton.className = 'attack-roll-btn';
-            attackButton.type = 'button';
-            attackButton.onclick = () => {
-                handleAttackRoll(nameInput.value, bonusInput.value, damageInput.value);
-            };
-            itemRowDiv.appendChild(attackButton);
-
-            const removeButton = document.createElement('button');
-            removeButton.textContent = 'Remove';
-            removeButton.className = 'remove-item-btn';
-            removeButton.type = 'button';
-            removeButton.onclick = () => {
-                itemRowDiv.remove();
-            };
-            itemRowDiv.appendChild(removeButton);
-        } else {
-            // Add placeholders or empty divs to maintain layout if needed
-            const buttonPlaceholder = document.createElement('div');
-            buttonPlaceholder.style.width = '100px'; // Adjust width approx to buttons
-            buttonPlaceholder.style.display = 'inline-block'; // Maintain flow somewhat
-             itemRowDiv.appendChild(buttonPlaceholder.cloneNode()); // Placeholder for attack btn
-             itemRowDiv.appendChild(buttonPlaceholder.cloneNode()); // Placeholder for remove btn
-        }
-
-        return itemRowDiv;
-    };
-
-    // Populate list
+    // Correct population of the list using the global createAttackRowElement
     if (attacksArray && Array.isArray(attacksArray) && attacksArray.length > 0) {
         attacksArray.forEach((item) => {
-            listContainerDiv.appendChild(createAttackRowElement(item));
+            // Call the GLOBAL createAttackRowElement and pass isReadOnly
+            listContainerDiv.appendChild(createAttackRowElement(item, isReadOnly));
         });
     } else {
+        // Display "No attacks defined" message if the array is empty
         listContainerDiv.innerHTML = `<p>${isReadOnly ? 'No attacks defined.' : "No attacks defined. Click 'Add New Attack' to start."}</p>`;
     }
-    modalAttacksContent.appendChild(listContainerDiv);
+    modalAttacksContent.appendChild(listContainerDiv); // Append the populated list container ONCE
 
-    // Only show "Add New" button if NOT read-only
+    // Correct handling of the "Add New Attack" button
     const existingAddButton = document.getElementById('add-attack-btn');
-    if(existingAddButton) existingAddButton.remove(); // Remove old one
+    if (existingAddButton) existingAddButton.remove(); // Remove old one if it exists
 
-    if (!isReadOnly) {
+    if (!isReadOnly) { // Only show "Add New Attack" button if not in read-only mode
         const addButton = document.createElement('button');
         addButton.textContent = 'Add New Attack';
         addButton.type = 'button';
-        addButton.id = 'add-attack-btn';
+        addButton.id = 'add-attack-btn'; // Ensure this ID is unique or handled well if multiple modals use it
         addButton.onclick = () => {
-             const noItemsMsg = listContainerDiv.querySelector('p');
-             if (noItemsMsg) noItemsMsg.remove();
-             const newItemRow = createAttackRowElement(); // isReadOnly is false here
-             listContainerDiv.appendChild(newItemRow);
-             newItemRow.querySelector('.attack-name')?.focus();
+            const noItemsMsg = listContainerDiv.querySelector('p');
+            if (noItemsMsg && noItemsMsg.parentNode === listContainerDiv) { // Ensure it's the direct placeholder
+                 noItemsMsg.remove();
+            }
+            // Call the GLOBAL createAttackRowElement, passing isReadOnly as false for new items
+            const newItemRow = createAttackRowElement({}, false);
+            listContainerDiv.appendChild(newItemRow);
+            newItemRow.querySelector('.attack-name')?.focus();
         };
-        modalAttacksContent.appendChild(addButton);
+        modalAttacksContent.appendChild(addButton); // Append the "Add New Attack" button
     }
 
-    // Hide Save Button in Read-Only Mode
+    // Correct handling of the "Save Attacks" button visibility
     if (saveAttacksButton) {
         saveAttacksButton.style.display = isReadOnly ? 'none' : 'inline-block';
     }
-}
+} // <<< END OF populateAttacksModal function
+
+
+// The saveAttacksButton event listener should be defined OUTSIDE and only ONCE globally
 if (saveAttacksButton) {
     saveAttacksButton.addEventListener('click', () => {
         if (!currentCharacterSheet || !currentAuthenticatedUsername) {
@@ -1712,11 +1747,12 @@ if (saveAttacksButton) {
         }
 
         const newAttacks = [];
+        // Query from the correct, uniquely populated list
         const attackRows = modalAttacksContent.querySelectorAll('#attacks-list-display .attack-row');
 
         attackRows.forEach(row => {
             const name = row.querySelector('.attack-name')?.value.trim() || '';
-            if (name) { // Only save if there's a name
+            if (name) {
                 newAttacks.push({
                     name: name,
                     attackBonus: row.querySelector('.attack-bonus')?.value.trim() || '+0',
@@ -1728,60 +1764,12 @@ if (saveAttacksButton) {
 
         console.log("Emitting 'update character sheet' (Attacks only) with data:", newAttacks);
         socket.emit('update character sheet', {
-            sheetUpdates: { attacks: newAttacks } // Send ONLY the attacks array
+            sheetUpdates: { attacks: newAttacks }
         });
 
         addMessageToChat("Saving Attacks changes...");
-        // attacksModal.style.display = 'none'; // Optional: close modal
     });
 }
-const SPELL_LEVELS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
-
-// --- populateSpellsModal (Ensure previous modifications + Read-Only) ---
-// Add isReadOnly parameter
-function populateSpellsModal(sheetData, isReadOnly = false) {
-    if (!sheetData || !modalSpellsContent) return;
-
-    // --- Add Title indication ---
-    const titleH2 = spellsModal.querySelector('h2');
-    if(titleH2) {
-        titleH2.textContent = isReadOnly ? `Viewing ${sheetData.playerName}'s Spellcasting (Read-Only)` : "Spellcasting";
-    }
-    // --- End Title ---
-
-    // --- Populate Core Info (and disable) ---
-    if (spellClassInput) {
-        spellClassInput.value = sheetData.spellcastingClass || '';
-        spellClassInput.disabled = isReadOnly;
-    }
-    if (spellAbilitySelect) {
-        spellAbilitySelect.value = sheetData.spellcastingAbility || '';
-        spellAbilitySelect.disabled = isReadOnly;
-    }
-    if (spellSaveDCInput) {
-        spellSaveDCInput.value = sheetData.spellSaveDC || 8;
-        spellSaveDCInput.disabled = isReadOnly;
-    }
-    if (spellAttackBonusInput) {
-        spellAttackBonusInput.value = sheetData.spellAttackBonus || 0;
-        spellAttackBonusInput.disabled = isReadOnly;
-    }
-
-    // Populate Spell Slots (and disable inputs)
-    populateSpellSlots(sheetData.spellSlots, isReadOnly); // Pass flag
-
-    // Populate Spells List with Tabs (and disable controls within)
-    populateSpellTabsAndLists(sheetData.spells || [], isReadOnly); // Pass flag
-
-    // Activate the first tab (Cantrips) by default
-    activateSpellTab(0); // Show level 0 initially
-
-    // Hide Save Button in Read-Only Mode
-    if (saveSpellsButton) {
-        saveSpellsButton.style.display = isReadOnly ? 'none' : 'inline-block';
-    }
-}
-
 // Modify populateSpellSlots to accept isReadOnly
 function populateSpellSlots(spellSlotsData = {}, isReadOnly = false) {
     if (!spellSlotsGrid) return;
@@ -2479,4 +2467,74 @@ if (quickHpCurrentInput) {
      quickHpCurrentInput.addEventListener('input', (event) => {
          event.target.value = event.target.value.replace(/[^0-9]/g, '');
      });
+}
+// MODIFIED handleAttackRoll - It now ONLY handles the attack roll.
+function handleAttackRoll(attackName, attackBonusStr) {
+    if (!currentCharacterSheet || !currentAuthenticatedUsername) {
+        addMessageToChat("Error: Character sheet not loaded or user not authenticated.");
+        console.error("Attack roll attempted without sheet/auth.");
+        return;
+    }
+
+    const rollerName = getPlayerName();
+    attackName = attackName || "Unnamed Attack";
+
+    console.log(`Handling Modal Attack Roll: Name='${attackName}', Bonus='${attackBonusStr}'`);
+
+    let atkBonusValue = 0;
+    const bonusMatch = attackBonusStr.match(/[+-]?\d+/); // Parses "+5", "-2", "3"
+    if (bonusMatch) {
+        atkBonusValue = parseInt(bonusMatch[0], 10);
+    } else {
+        // If you need to parse "Str+Prof" etc., you'll need more complex logic here.
+        // For now, it assumes a numerical bonus or defaults to 0 if unparsable.
+        console.warn(`Could not directly parse attack bonus "${attackBonusStr}" for ${attackName} as a simple number. Using 0 for now.`);
+    }
+
+    const atkBonusStringForRoll = formatBonusString(atkBonusValue);
+    const attackRollStringToServer = `1d20${atkBonusStringForRoll}`;
+
+    console.log(`Emitting 'dice roll' for Attack: ${rollerName}, ${attackRollStringToServer}, Desc: ${attackName} (Attack: ${attackBonusStr})`);
+    socket.emit('dice roll', {
+        rollerName: rollerName,
+        rollString: attackRollStringToServer,
+        description: `${attackName}: Attack Roll (${attackBonusStr})`
+    });
+}
+
+// NEW function specifically for rolling damage from the modal
+function handleDamageRoll(attackName, damageDiceStr) {
+    if (!currentCharacterSheet || !currentAuthenticatedUsername) {
+        addMessageToChat("Error: Character sheet not loaded or user not authenticated.");
+        console.error("Damage roll attempted without sheet/auth.");
+        return;
+    }
+
+    const rollerName = getPlayerName();
+    attackName = attackName || "Unnamed Attack";
+    damageDiceStr = damageDiceStr.trim(); // Get the value from the damage input field
+
+    console.log(`Handling Modal Damage Roll: Name='${attackName}', Damage Dice='${damageDiceStr}'`);
+
+    if (!damageDiceStr) {
+        addMessageToChat(`No damage dice string provided for ${attackName}.`);
+        return;
+    }
+
+    // Basic check if it looks like a dice string (e.g., "1d8", "2d6+3")
+    // You might want a more robust regex for validation
+    if (damageDiceStr.match(/\d+[dD]\d+/)) {
+        console.log(`Emitting 'dice roll' for Damage: ${rollerName}, ${damageDiceStr}, Desc: ${attackName} (Damage)`);
+        socket.emit('dice roll', {
+            rollerName: rollerName,
+            rollString: damageDiceStr,
+            description: `${attackName}: Damage (${damageDiceStr})`
+        });
+    } else {
+        // If it's not a standard dice string (e.g., "5", "special"), you might just display it
+        // or show an error if you only expect dice.
+        addMessageToChat(`Cannot roll damage for "${damageDiceStr}" for ${attackName}. Not a recognized dice format. Displaying as text.`);
+        // Or, to simply display the text as a chat message if it's not a roll:
+        // socket.emit('client message', { sender: "System", text: `${rollerName}'s ${attackName} causes: ${damageDiceStr}` });
+    }
 }

@@ -748,16 +748,55 @@ body.dark-mode .feat-trait-row textarea {
 
 /* --- Style individual attack rows --- */
 .attack-row {
-    display: flex;
-    flex-wrap: wrap; /* Allow wrapping */
+    display: flex; /* Use flex for the main row items */
+    flex-wrap: wrap;
     gap: 8px;
-    align-items: center; /* Center items vertically */
+    align-items: center;
     margin-bottom: 8px;
     padding: 6px 8px;
     border: 1px solid var(--inventory-row-border);
     border-radius: 4px;
     background-color: var(--inventory-row-bg);
 }
+
+/* Inputs take up available space first */
+.attack-name { flex: 2 1 150px; min-width: 120px; }
+.attack-bonus { flex: 1 1 70px; min-width: 60px; }
+.attack-damage { flex: 1 1 100px; min-width: 80px; } /* For damage dice string */
+.attack-type { flex: 1 1 100px; min-width: 80px; }
+
+/* New container for buttons to group them and push to the right */
+.attack-buttons-container {
+    display: flex;
+    gap: 5px; /* Space between buttons */
+    margin-left: auto; /* Push the whole button group to the right */
+    flex-shrink: 0; /* Prevent buttons container from shrinking */
+}
+
+/* Common style for action buttons in modals */
+.modal-action-button {
+    padding: 5px 8px;
+    font-size: 0.85em;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    color: var(--button-text);
+}
+
+.attack-roll-btn.modal-action-button {
+    background-color: var(--button-bg); /* Default button color */
+}
+.attack-roll-btn.modal-action-button:hover {
+    background-color: var(--button-hover-bg);
+}
+
+.damage-roll-btn.modal-action-button {
+    background-color: var(--link-color); /* A different color for damage, e.g., link color */
+}
+.damage-roll-btn.modal-action-button:hover {
+    background-color: var(--link-hover-color);
+}
+
 
 .attack-row input[type="text"] {
     margin-bottom: 0;
@@ -809,9 +848,10 @@ body.dark-mode .attack-row input[type="text"] {
 }
 /* Reuse remove button style */
 .attack-row .remove-item-btn {
-     flex: 0 0 auto; /* Don't grow or shrink */
-     /* Styles already defined */
-     margin-left: 5px;
+     flex: 0 0 auto;
+     padding: 5px 8px; /* Match other buttons */
+     font-size: 0.85em; /* Match other buttons */
+     /* background-color is already var(--remove-button-bg) */
 }
 
 /* Reuse add button style */
