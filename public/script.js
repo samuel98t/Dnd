@@ -4,6 +4,8 @@ let currentUserIsDM = false;
 let currentAuthenticatedUsername = null;
 let currentCharacterSheet = null; // To store the user's sheet
 let allCharacterSheets = {}; // Store sheets keyed by playerName
+// Get the new Save Character Data button
+const saveCharacterDataButton = document.getElementById('saveCharacterDataButton');
 // Get Attacks Modal Elements
 const openAttacksButton = document.getElementById('openAttacksButton');
 const attacksModal = document.getElementById('attacksModal');
@@ -2537,4 +2539,98 @@ function handleDamageRoll(attackName, damageDiceStr) {
         // Or, to simply display the text as a chat message if it's not a roll:
         // socket.emit('client message', { sender: "System", text: `${rollerName}'s ${attackName} causes: ${damageDiceStr}` });
     }
+}
+async function saveAllCharacterData() {
+    if (!currentCharacterSheet || !currentAuthenticatedUsername) {
+        addMessageToChat("Error: Character sheet not loaded. Cannot save data.", "error");
+        console.error("Save All Data: currentCharacterSheet or currentAuthenticatedUsername is not available.");
+        return;
+    }
+
+    if (typeof JSZip === 'undefined') {
+        addMessageToChat("Error: JSZip library is not loaded. Cannot create zip file.", "error");
+        console.error("Save All Data: JSZip is not defined.");
+        return;
+    }
+
+    try {
+        addMessageToChat("Preparing your data for download...", "system");
+
+        // 1. Prepare Core Character Sheet Data
+        const coreSheetData = {};
+        const excludedCoreKeys = [
+            '_id', 'userId', 'inventory', 'featsAndTraits', 'attacks', 
+            'spellSlots', 'spells', 'cp', 'sp', 'ep', 'gp', 'pp', 
+            'lastUpdated', '__v', 'spellcastingClass', 'spellcastingAbility', 
+            'spellSaveDC', 'spellAttackBonus' // These go into spellcasting.json
+        ];
+        for (const key in currentCharacterSheet) {
+            if (currentCharacterSheet.hasOwnProperty(key) && !excludedCoreKeys.includes(key)) {
+                coreSheetData[key] = currentCharacterSheet[key];
+            }
+        }
+
+        // 2. Prepare Inventory Data (Items + Currency)
+        const inventoryData = {
+            items: currentCharacterSheet.inventory || [],
+            currency: {
+                cp: currentCharacterSheet.cp || 0,
+                sp: currentCharacterSheet.sp || 0,
+                ep: currentCharacterSheet.ep || 0,
+                gp: currentCharacterSheet.gp || 0,
+                pp: currentCharacterSheet.pp || 0,
+            }
+        };
+
+        // 3. Prepare Feats & Traits Data
+        const featsAndTraitsData = currentCharacterSheet.featsAndTraits || [];
+
+        // 4. Prepare Attacks Data
+        const attacksData = currentCharacterSheet.attacks || [];
+
+        // 5. Prepare Spellcasting Data
+        const spellcastingData = {
+            spellcastingClass: currentCharacterSheet.spellcastingClass || '',
+            spellcastingAbility: currentCharacterSheet.spellcastingAbility || '',
+            spellSaveDC: currentCharacterSheet.spellSaveDC || 8,
+            spellAttackBonus: currentCharacterSheet.spellAttackBonus || 0,
+            spellSlots: currentCharacterSheet.spellSlots || {},
+            spells: currentCharacterSheet.spells || []
+        };
+
+        // Create a new JSZip instance
+        const zip = new JSZip();
+
+        // Add JSON files to the zip
+        zip.file("character_sheet_core.json", JSON.stringify(coreSheetData, null, 2));
+        zip.file("inventory.json", JSON.stringify(inventoryData, null, 2));
+        zip.file("feats_and_traits.json", JSON.stringify(featsAndTraitsData, null, 2));
+        zip.file("attacks.json", JSON.stringify(attacksData, null, 2));
+        zip.file("spellcasting.json", JSON.stringify(spellcastingData, null, 2));
+
+        // Generate the zip file as a blob
+        const zipBlob = await zip.generateAsync({ type: "blob" });
+
+        // Create a download link and trigger the download
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(zipBlob);
+        const filename = `${currentAuthenticatedUsername.replace(/\s+/g, '_') || 'character'}_dnd_data.zip`;
+        link.download = filename;
+        
+        document.body.appendChild(link); // Append to body to make it clickable
+        link.click();
+        document.body.removeChild(link); // Clean up
+        URL.revokeObjectURL(link.href); // Release object URL
+
+        addMessageToChat(`Character data downloaded as ${filename}.`, "system");
+
+    } catch (error) {
+        console.error("Error saving character data:", error);
+        addMessageToChat("Error: Could not save character data. " + error.message, "error");
+    }
+}
+
+// Add event listener to the save data button
+if (saveCharacterDataButton) {
+    saveCharacterDataButton.addEventListener('click', saveAllCharacterData);
 }
