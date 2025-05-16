@@ -1,5 +1,7 @@
 // Connect to server , socket will be our individual connection
 const socket = io();
+const PING_INTERVAL_MS = 25000; // Send a ping every 25 seconds
+let pingIntervalId = null;
 let currentUserIsDM = false;
 let currentAuthenticatedUsername = null;
 let currentCharacterSheet = null; // To store the user's sheet
@@ -124,11 +126,31 @@ console.log("Socket.IO script loaded, trying to connect...");
 // Listen for connect
 socket.on('connect',()=>{
     console.log(`Connected to server! Socket ID:`, socket.id);
+        // --- NEW: Start Pinging ---
+    if (pingIntervalId) clearInterval(pingIntervalId); // Clear any old interval
+    pingIntervalId = setInterval(() => {
+        if (socket.connected) { // Only send if connected
+            console.log('Client: Sending ping to server.');
+            socket.emit('client-ping', { timestamp: new Date().toISOString() });
+        }
+    }, PING_INTERVAL_MS);
+
+    socket.on('server-pong', (data) => {
+        console.log('Client: Received pong from server.', data);
+    });
+    // --- END NEW ---
 
 });
 // Listen for disconnect
 socket.on('disconnect',()=>{
     console.log('Disconnected from server!');
+        // --- NEW: Stop Pinging ---
+    if (pingIntervalId) {
+        clearInterval(pingIntervalId);
+        pingIntervalId = null;
+        console.log('Client: Stopped ping interval due to disconnection.');
+    }
+    // --- END NEW --
 });
 // Listen for roll error
 socket.on('roll error', (errorData) => {

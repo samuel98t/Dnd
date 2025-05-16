@@ -253,6 +253,12 @@ io.on('connection',(socket)=>{
             socket.emit('auth error', { message: 'Registration failed. Please try again.' });
         }
     });
+        // --- NEW: Handle Client Pings ---
+    socket.on('client-ping', (data) => {
+        console.log(`Server: Received ping from ${activeUsers[socket.id] || socket.id}. Timestamp: ${data.timestamp}`);
+        // Send a pong back to this specific client
+        socket.emit('server-pong', { serverTimestamp: new Date().toISOString(), clientTimestamp: data.timestamp });
+    });
     // Login 
     socket.on('login',async(credentials)=>{
         const{username,password}= credentials;
