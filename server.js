@@ -25,6 +25,10 @@ const spellSlotLevelSchema = new mongoose.Schema({
 }, { _id: false });
 // Serve the static files from 'public'
 app.use(express.static(path.join(__dirname,'public')));
+app.get('/ping-http', (req, res) => {
+    console.log('HTTP Ping received.');
+    res.status(200).send('HTTP Pong from server');
+});
 
 // Connect to Mongoose
 mongoose.connect(MONGODB_URI,{
@@ -213,6 +217,15 @@ function rollDice(diceString) {
 }
 // When a client connects
 io.on('connection',(socket)=>{
+    const checkAndEmitHttpPingState = () => {
+        const activeUserCount = Object.keys(activeUsers).length;
+        if (activeUserCount > 0) {
+            io.emit('http-ping-should-be-active', true);
+        } else {
+            io.emit('http-ping-should-be-active', false);
+        }
+        console.log(`Server: Active users: ${activeUserCount}. HTTP ping state emitted.`);
+    };
     console.log('A user connected (pre-auth):', socket.id);
     socket.emit('update user list', Object.values(activeUsers));
     // Register
@@ -237,6 +250,7 @@ io.on('connection',(socket)=>{
             await newSheet.save(); // Save
             // Add user to active users
             activeUsers[socket.id] = normalizedUsername;
+            socket.isHttpPinger = false;
             const isDM = normalizedUsername.toLowerCase() === DM_USERNAME.toLowerCase();
             socket.emit('auth success',{username:normalizedUsername,sheet: newSheet.toObject(),isDM:isDM});
             socket.emit('chat history', chatHistory);
@@ -248,6 +262,7 @@ io.on('connection',(socket)=>{
             // Broadcast updated user list to ALL clients
             const usernamesArray = Object.values(activeUsers);
             io.emit('update user list', usernamesArray);
+            checkAndEmitHttpPingState();
         } catch (err) {
             console.error("Registration error:", err);
             socket.emit('auth error', { message: 'Registration failed. Please try again.' });
@@ -279,6 +294,7 @@ io.on('connection',(socket)=>{
             const match = await bcrypt.compare(password,user.passwordHash);
             if(match){
                 activeUsers[socket.id]=normalizedUsername;
+                socket.isHttpPinger = false;
                 let sheet = await CharacterSheet.findOne({userId:user._id}).lean();
                 const isDM = normalizedUsername.toLowerCase() === DM_USERNAME.toLowerCase(); // Check if this user is the DM
                 // Realistically should never happen but just incase
@@ -293,6 +309,7 @@ io.on('connection',(socket)=>{
                 const allSheets = await CharacterSheet.find().lean();
                 io.emit('all character sheets',formatSheetsForClient(allSheets));
                 io.emit('update user list',Object.values(activeUsers));
+                checkAndEmitHttpPingState();
                 console.log(`User ${normalizedUsername} logged in.`);
            } else {
                 socket.emit('auth error', { message: 'Invalid username or password.' });
@@ -464,6 +481,7 @@ io.on('connection',(socket)=>{
             io.emit('server message', { text: `${username} has disconnected.`, type: 'system' });
             io.emit('update user list', Object.values(activeUsers));
             io.emit('player disconnected', username);
+            checkAndEmitHttpPingState();
         }else{
             console.log('A pre-auth user disconnected:', socket.id);
         }

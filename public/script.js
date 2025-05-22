@@ -123,6 +123,48 @@ const SKILLS = [
 const userListUL = document.getElementById('user-list');
 // Connection Test
 console.log("Socket.IO script loaded, trying to connect...");
+const HTTP_PING_INTERVAL_MS = 10 * 60 * 1000; // Every 10 minutes
+let httpPingIntervalId = null;
+let amHttpPinger = false; // Flag to track if this client is responsible for pinging
+function sendHttpPing() {
+    fetch('/ping-http')
+        .then(response => {
+            if (response.ok) return response.text();
+            throw new Error(`HTTP Ping failed: ${response.status} ${response.statusText}`);
+        })
+        .then(text => console.log(`Client: Received HTTP Pong - ${text}`))
+        .catch(error => console.error('Client: HTTP Ping error:', error));
+}
+
+function startHttpPinger() {
+    if (!httpPingIntervalId) {
+        console.log('Client: Starting HTTP pinger role.');
+        sendHttpPing(); // Send one immediately
+        httpPingIntervalId = setInterval(sendHttpPing, HTTP_PING_INTERVAL_MS);
+        amHttpPinger = true;
+    }
+}
+
+function stopHttpPinger() {
+    if (httpPingIntervalId) {
+        console.log('Client: Stopping HTTP pinger role.');
+        clearInterval(httpPingIntervalId);
+        httpPingIntervalId = null;
+        amHttpPinger = false;
+    }
+}
+// Listen for server's signal about HTTP ping state
+socket.on('http-ping-should-be-active', (shouldBeActive) => {
+    console.log(`Client: Received http-ping-should-be-active: ${shouldBeActive}`);
+    if (shouldBeActive) {
+        if (currentAuthenticatedUsername && !amHttpPinger) {
+             startHttpPinger();
+        }
+    } else {
+        stopHttpPinger();
+    }
+});
+
 // Listen for connect
 socket.on('connect',()=>{
     console.log(`Connected to server! Socket ID:`, socket.id);
@@ -151,6 +193,10 @@ socket.on('disconnect',()=>{
         console.log('Client: Stopped ping interval due to disconnection.');
     }
     // --- END NEW --
+    if (amHttpPinger) {
+        stopHttpPinger(); // Ensure this client stops if it was the pinger
+    }
+
 });
 // Listen for roll error
 socket.on('roll error', (errorData) => {
