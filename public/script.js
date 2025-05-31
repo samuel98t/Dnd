@@ -1,6 +1,6 @@
 // Connect to server , socket will be our individual connection
 const socket = io();
-const PING_INTERVAL_MS = 25000; // Send a ping every 25 seconds
+const PING_INTERVAL_MS = 250000; // Send a ping every 25 seconds
 let pingIntervalId = null;
 let currentUserIsDM = false;
 let currentAuthenticatedUsername = null;
@@ -1998,8 +1998,9 @@ function createSpellRowElement(spell = {}, isReadOnly = false) {
     detailsArea.className = 'spell-details-grid';
 
     // Modified helper to create detail inputs (and disable)
-    const createDetailInput = (label, type, value, placeholder, className = '', options = null) => {
+    const createDetailInput = (label, type, value, placeholder, className = '', options = null, changeListener = null, containerClass = '') => {
         const wrap = document.createElement('div');
+        if (containerClass) wrap.classList.add(containerClass);
         const lbl = document.createElement('label');
         lbl.textContent = label + ':';
         wrap.appendChild(lbl);
@@ -2043,8 +2044,10 @@ function createSpellRowElement(spell = {}, isReadOnly = false) {
     detailsArea.appendChild(createDetailInput('Components', 'text', spell.components, 'V, S, M (cost)', 'spell-components'));
     detailsArea.appendChild(createDetailInput('Duration', 'text', spell.duration, 'e.g., Instantaneous', 'spell-duration'));
     detailsArea.appendChild(createDetailInput('Damage/Effect', 'text', spell.damageEffect, 'e.g., 3d6 Fire / Save DC', 'spell-damageEffect'));
-    detailsArea.appendChild(createDetailInput('Description', 'textarea', spell.description, 'Spell details...', 'spell-description'));
-
+    detailsArea.appendChild(createDetailInput(
+    'Description', 'textarea', spell.description,
+    'Spell details...', 'spell-description', null, null, 'spell-description-container' // Added 'spell-description-container' as the 8th arg
+));
     // Only add Cast and Remove buttons if NOT read-only
     const castButtonArea = document.createElement('div');
     castButtonArea.className = 'spell-cast-button-area';

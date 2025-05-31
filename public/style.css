@@ -853,7 +853,13 @@ body.dark-mode .attack-row input[type="text"] {
      font-size: 0.85em; /* Match other buttons */
      /* background-color is already var(--remove-button-bg) */
 }
-
+.spell-details-grid .spell-description-container {
+    grid-column: 1 / -1; /* Make this grid item span from the first to the last column */
+}
+.spell-details-grid .spell-description-container textarea {
+     width: 100%; /* Make the textarea fill its container */
+     /* Other styles like padding, border, etc. should already apply from the generic textarea rules */
+}
 /* Reuse add button style */
 #add-attack-btn {
     background-color: var(--add-button-bg);
